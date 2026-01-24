@@ -680,3 +680,144 @@ class NODE_OT_remove_empty_textures_nodes_script(bpy.types.Operator):
 
         self.report({'INFO'}, f"Removed {removed_nodes_count} empty or unused nodes.")
         return {'FINISHED'}
+
+class NODE_OT_create_and_assign_materials(bpy.types.Operator):
+    bl_idname = "object.create_and_assign_materials"
+    bl_label = "Create and Assign Materials (10x10)"
+    bl_description = "Creates materials and assigns them to the faces of a 10x10 grid from DDS textures"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        # --- Configuration ---
+        GRID_SIZE = 10
+        TOTAL_FACES = GRID_SIZE * GRID_SIZE
+        TEXTURE_FOLDER = "//../dds/"
+        TEXTURE_SUFFIX = ".dds"
+        MATERIAL_PREFIX = "zrhGroundSwisstopo2022-8k_"
+
+        # 1. Check for a selected object
+        obj = context.object
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Please select a MESH object (the subdivided plane).")
+            return {'CANCELLED'}
+
+        # Check if we are in Edit mode, switch to Object mode temporarily
+        if context.view_layer.objects.active and context.view_layer.objects.active.mode == 'EDIT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Check the number of faces
+        if len(obj.data.polygons) != TOTAL_FACES:
+            self.report({'ERROR'}, f"Selected object must have exactly {TOTAL_FACES} faces (a {GRID_SIZE}x{GRID_SIZE} grid). It has {len(obj.data.polygons)}.")
+            return {'CANCELLED'}
+
+        print(f"Starting material creation and assignment for {TOTAL_FACES} faces...")
+
+        # Clear existing materials slots on the object
+        # We can't iterate and remove directly efficiently, so we use the operator
+        bpy.ops.object.material_slot_remove_unused() # Optional cleanup
+        
+        # More robust way to remove all slots
+        while obj.material_slots:
+            bpy.context.object.active_material_index = 0
+            bpy.ops.object.material_slot_remove()
+
+        # Create and assign materials
+        for face_index in range(TOTAL_FACES):
+            # Calculate (column, row) coordinates (1-based index)
+            # This assumes the faces are indexed in a row-major order:
+            # 0..9 (row 1), 10..19 (row 2), ..., 90..99 (row 10)
+            # Row index 'y' (1 to 10)
+            # Column index 'x' (1 to 10)
+            row = (face_index // GRID_SIZE) + 1
+            col = (face_index % GRID_SIZE) + 1
+
+            # Determine file and material names
+            # File name format: "x_y_Luftbild2024.dds" - User said: "x_y_Luftbild2024.dds" in comments but logic used: f"{col}_{row}{TEXTURE_SUFFIX}"
+            # The user script logic: file_name = f"{col}_{row}{TEXTURE_SUFFIX}"
+            # Assuming TEXTURE_SUFFIX = ".dds", so "1_1.dds".
+            # Note: The user comment said "File name format: "x_y_Luftbild2024.dds"" but the code was `file_name = f"{col}_{row}{TEXTURE_SUFFIX}"`.
+            # I will stick to the CODE provided by the user.
+            
+            file_name = f"{col}_{row}{TEXTURE_SUFFIX}"
+            material_name = f"{MATERIAL_PREFIX}{col}-{row}"
+
+            # 2. Create New Material
+            mat = bpy.data.materials.get(material_name)
+            if mat is None:
+                mat = bpy.data.materials.new(name=material_name)
+                mat.use_nodes = True
+                print(f"  Created material: {material_name}")
+            else:
+                print(f"  Reusing existing material: {material_name}")
+
+
+            # 3. Add Material Slot and Assign to Face
+            obj.data.materials.append(mat)
+            
+            # Get the index of the newly added material slot
+            slot_index = len(obj.material_slots) - 1
+            
+            # Assign the material slot index to the current face
+            obj.data.polygons[face_index].material_index = slot_index
+            
+
+            # 4. Configure Material Nodes (Albedo Texture)
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+            
+            # Clear existing nodes for a clean slate (optional, but safer)
+            for node in nodes:
+                if node.name != 'Material Output' and node.name != 'Principled BSDF':
+                    nodes.remove(node)
+
+            principled_bsdf = nodes.get("Principled BSDF")
+            if not principled_bsdf:
+                # If Principled BSDF was removed, re-add it (shouldn't happen with the clear above)
+                principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+                principled_bsdf.location = (-200, 0)
+                output_node = nodes.get("Material Output")
+                if output_node:
+                    links.new(principled_bsdf.outputs['BSDF'], output_node.inputs['Surface'])
+            
+            # Create Image Texture node
+            tex_image = nodes.new('ShaderNodeTexImage')
+            tex_image.location = (-400, 0)
+            
+            # Set image path (relative path)
+            image_path = os.path.join(TEXTURE_FOLDER, file_name)
+            
+            # Blender's relative path handling starts with '//'
+            # The os.path.join will need to be careful with the leading '//'
+            if not image_path.startswith('//'):
+                image_path = '//' + image_path
+
+            # Load Image
+            # Check if image is already loaded
+            img = bpy.data.images.get(file_name)
+            if img is None:
+                try:
+                    # Use bpy.path.abspath to resolve the path relative to the .blend file
+                    abs_path = bpy.path.abspath(image_path)
+                    # We only load if it exists to avoid errors spamming
+                    if os.path.exists(abs_path):
+                         img = bpy.data.images.load(abs_path, check_existing=True)
+                    else:
+                         print(f"  Warning: File not found {abs_path}")
+                         img = None
+                except RuntimeError as e:
+                    print(f"  Warning: Could not load image {image_path}. Error: {e}")
+                    img = None # Ensure img is None if loading fails
+
+            tex_image.image = img
+            
+            # Connect Image Texture to Principled BSDF Base Color
+            links.new(tex_image.outputs['Color'], principled_bsdf.inputs['Base Color'])
+            
+            # Set image texture color space to Non-Color for DDS (often used for non-albedo data)
+            # However, for an "albedo image texture", it is usually sRGB.
+            # I will keep it as the default which is usually sRGB unless you specify otherwise.
+            # If the DDS is raw data, uncomment the line below:
+            # tex_image.image.colorspace_settings.name = 'Non-Color'
+
+        self.report({'INFO'}, "Materials created and assigned successfully.")
+        return {'FINISHED'}

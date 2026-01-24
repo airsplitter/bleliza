@@ -17,6 +17,7 @@ classes = (
     operators.NODE_OT_create_preset_2024,
     operators.NODE_OT_replace_textures_script,
     operators.NODE_OT_remove_empty_textures_nodes_script,
+    operators.NODE_OT_create_and_assign_materials,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
 )
