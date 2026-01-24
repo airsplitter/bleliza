@@ -88,3 +88,41 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         
         op_sel = layout.operator("mesh.select_flat_islands", text="Select Flat Z Islands")
         op_sel.threshold = scene.bleliza_flat_threshold
+        
+        layout.separator()
+        layout.label(text="Custom Properties:")
+        
+        # 1. Add shadow=0 to all
+        op = layout.operator("object.bleliza_set_custom_property", text="Add Shadow=0 (All)")
+        op.prop_name = "aliza_cast_shadow"
+        op.prop_value = 0
+        op.target = 'ALL'
+        op.overwrite = False
+        
+        # 2. Set shadow=1 to selected
+        op = layout.operator("object.bleliza_set_custom_property", text="Set Shadow=1 (Selected)")
+        op.prop_name = "aliza_cast_shadow"
+        op.prop_value = 1
+        op.target = 'SELECTED'
+        op.overwrite = True
+        
+        # 3. Set marking=1 to selected
+        op = layout.operator("object.bleliza_set_custom_property", text="Set Marking=1 (Selected)")
+        op.prop_name = "aliza_marking"
+        op.prop_value = 1
+        op.target = 'SELECTED'
+        op.overwrite = True
+        
+        # 4. Set tree=1 to selected
+        op = layout.operator("object.bleliza_set_custom_property", text="Set Tree=1 (Selected)")
+        op.prop_name = "aliza_tree"
+        op.prop_value = 1
+        op.target = 'SELECTED'
+        op.overwrite = True
+        
+        # 5. Set layer=0 to selected
+        op = layout.operator("object.bleliza_set_custom_property", text="Set Layer=0 (Selected)")
+        op.prop_name = "aliza_layer"
+        op.prop_value = 0
+        op.target = 'SELECTED'
+        op.overwrite = True

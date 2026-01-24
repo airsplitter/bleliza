@@ -1027,3 +1027,41 @@ class NODE_OT_select_flat_islands(bpy.types.Operator):
         bmesh.update_edit_mesh(obj.data)
         self.report({'INFO'}, "Flat islands selected.")
         return {'FINISHED'}
+
+class OBJECT_OT_bleliza_set_custom_property(bpy.types.Operator):
+    bl_idname = "object.bleliza_set_custom_property"
+    bl_label = "Set Custom Property"
+    bl_description = "Add or update a custom property on objects"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    prop_name: bpy.props.StringProperty(name="Property Name")
+    prop_value: bpy.props.IntProperty(name="Property Value")
+    target: bpy.props.EnumProperty(
+        name="Target",
+        items=[
+            ('ALL', "All Objects", "Apply to all objects in the scene"),
+            ('SELECTED', "Selected Objects", "Apply to selected objects only"),
+        ],
+        default='SELECTED'
+    )
+    overwrite: bpy.props.BoolProperty(name="Overwrite", default=True)
+
+    def execute(self, context):
+        if self.target == 'ALL':
+            objects = context.scene.objects
+        else:
+            objects = context.selected_objects
+            if not objects:
+                self.report({'WARNING'}, "No objects selected")
+                return {'CANCELLED'}
+
+        count = 0
+        for obj in objects:
+            if not self.overwrite and self.prop_name in obj:
+                continue
+            
+            obj[self.prop_name] = self.prop_value
+            count += 1
+            
+        self.report({'INFO'}, f"Set '{self.prop_name}' to {self.prop_value} on {count} objects.")
+        return {'FINISHED'}
