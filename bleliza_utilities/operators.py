@@ -1177,3 +1177,84 @@ class NODE_OT_assign_random_materials_islands(bpy.types.Operator):
         
         self.report({'INFO'}, f"Assigned materials to {len(face_groups)} islands.")
         return {'FINISHED'}
+
+class NODE_OT_assign_random_materials_selected_islands(bpy.types.Operator):
+    bl_idname = "mesh.assign_random_materials_selected_islands"
+    bl_label = "Assign Random Materials to Selected Islands"
+    bl_description = "Assigns random materials (filtered by name) to connected components of selected faces"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    material_name_filter: bpy.props.StringProperty(
+        name="Material Name Filter",
+        description="Only use materials containing this string (case-insensitive)",
+        default="roof"
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Please select a mesh object.")
+            return {'CANCELLED'}
+
+        # Ensure Edit Mode
+        if context.mode != 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        # Filter materials
+        filter_str = self.material_name_filter.lower()
+        roof_materials = [mat for mat in bpy.data.materials if filter_str in mat.name.lower()]
+
+        if not roof_materials:
+            self.report({'WARNING'}, f"No materials matching '{self.material_name_filter}' found.")
+            return {'CANCELLED'}
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+
+        selected_faces = [f for f in bm.faces if f.select]
+
+        if not selected_faces:
+            self.report({'INFO'}, "No faces selected.")
+            return {'CANCELLED'}
+
+        # Ensure material slots exist
+        for mat in roof_materials:
+            if obj.data.materials.find(mat.name) == -1:
+                obj.data.materials.append(mat)
+
+        visited_faces = set()
+        count = 0
+
+        for face in selected_faces:
+            if face in visited_faces:
+                continue
+
+            # Connected component
+            connected_component = set()
+            queue = [face]
+            visited_faces.add(face)
+            connected_component.add(face)
+
+            while queue:
+                current_face = queue.pop(0)
+                for edge in current_face.edges:
+                    for linked_face in edge.link_faces:
+                        # Must be selected and not visited
+                        if linked_face.select and linked_face not in visited_faces:
+                            queue.append(linked_face)
+                            visited_faces.add(linked_face)
+                            connected_component.add(linked_face)
+
+            # Assign random material
+            chosen_material = random.choice(roof_materials)
+            material_index = obj.data.materials.find(chosen_material.name)
+            
+            if material_index != -1:
+                for f in connected_component:
+                    f.material_index = material_index
+            
+            count += 1
+
+        bmesh.update_edit_mesh(obj.data)
+        self.report({'INFO'}, f"Assigned materials to {count} connected components.")
+        return {'FINISHED'}

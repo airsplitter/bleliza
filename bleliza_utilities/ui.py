@@ -29,6 +29,13 @@ class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
         layout.operator("object.remove_empty_textures_nodes", text="Remove empty textures nodes")
         layout.operator("node.set_texture_extend", text="Set Texture Extension to EXTEND")
         layout.operator("mesh.assign_random_materials_islands", text="Assign Random Materials to Islands")
+        
+        layout.separator()
+        layout.label(text="Materials Filter:")
+        scene = context.scene
+        layout.prop(scene, "bleliza_mat_filter", text="Filter")
+        op_roof = layout.operator("mesh.assign_random_materials_selected_islands", text="Assign Filtered Materials to Selected Islands")
+        op_roof.material_name_filter = scene.bleliza_mat_filter
 
 # Panel for creating materials
 class MATERIAL_PT_create_materials_panel(bpy.types.Panel):
