@@ -25,6 +25,7 @@ classes = (
     operators.NODE_OT_create_and_assign_materials,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
+    ui.MATERIAL_PT_create_materials_panel,
 )
 
 def register():

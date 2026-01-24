@@ -683,14 +683,29 @@ class NODE_OT_remove_empty_textures_nodes_script(bpy.types.Operator):
 
 class NODE_OT_create_and_assign_materials(bpy.types.Operator):
     bl_idname = "object.create_and_assign_materials"
-    bl_label = "Create and Assign Materials (10x10)"
-    bl_description = "Creates materials and assigns them to the faces of a 10x10 grid from DDS textures"
+    bl_label = "Create and Assign Materials"
+    bl_description = "Creates materials and assigns them to the faces of a grid from DDS textures"
     bl_options = {'REGISTER', 'UNDO'}
+
+    grid_columns: bpy.props.IntProperty(
+        name="Columns",
+        default=10,
+        min=1,
+        description="Number of columns in the grid"
+    )
+    
+    grid_rows: bpy.props.IntProperty(
+        name="Rows",
+        default=10,
+        min=1,
+        description="Number of rows in the grid"
+    )
 
     def execute(self, context):
         # --- Configuration ---
-        GRID_SIZE = 10
-        TOTAL_FACES = GRID_SIZE * GRID_SIZE
+        columns = self.grid_columns
+        rows = self.grid_rows
+        TOTAL_FACES = columns * rows
         TEXTURE_FOLDER = "//../dds/"
         TEXTURE_SUFFIX = ".dds"
         MATERIAL_PREFIX = "zrhGroundSwisstopo2022-8k_"
@@ -707,7 +722,7 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
 
         # Check the number of faces
         if len(obj.data.polygons) != TOTAL_FACES:
-            self.report({'ERROR'}, f"Selected object must have exactly {TOTAL_FACES} faces (a {GRID_SIZE}x{GRID_SIZE} grid). It has {len(obj.data.polygons)}.")
+            self.report({'ERROR'}, f"Selected object must have exactly {TOTAL_FACES} faces (a {columns}x{rows} grid). It has {len(obj.data.polygons)}.")
             return {'CANCELLED'}
 
         print(f"Starting material creation and assignment for {TOTAL_FACES} faces...")
@@ -725,11 +740,11 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
         for face_index in range(TOTAL_FACES):
             # Calculate (column, row) coordinates (1-based index)
             # This assumes the faces are indexed in a row-major order:
-            # 0..9 (row 1), 10..19 (row 2), ..., 90..99 (row 10)
-            # Row index 'y' (1 to 10)
-            # Column index 'x' (1 to 10)
-            row = (face_index // GRID_SIZE) + 1
-            col = (face_index % GRID_SIZE) + 1
+            # 0..cols-1 (row 1), cols..2*cols-1 (row 2), ...
+            # Row index 'y' (1 to rows)
+            # Column index 'x' (1 to columns)
+            row = (face_index // columns) + 1
+            col = (face_index % columns) + 1
 
             # Determine file and material names
             # File name format: "x_y_Luftbild2024.dds" - User said: "x_y_Luftbild2024.dds" in comments but logic used: f"{col}_{row}{TEXTURE_SUFFIX}"
