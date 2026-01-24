@@ -45,6 +45,20 @@ class MATERIAL_PT_create_materials_panel(bpy.types.Panel):
         col.prop(scene, "bleliza_cols", text="Columns")
         col.prop(scene, "bleliza_rows", text="Rows")
         
+        col.separator()
+        col.label(text="Naming:")
+        col.prop(scene, "bleliza_mat_prefix", text="Mat Prefix")
+        col.prop(scene, "bleliza_tex_folder", text="Folder")
+        col.prop(scene, "bleliza_tex_name_prefix", text="File Prefix")
+        col.prop(scene, "bleliza_tex_name_suffix", text="File Suffix")
+        col.prop(scene, "bleliza_tex_ext", text="Extension")
+        
+        col.separator()
         op = col.operator("object.create_and_assign_materials", text="Create & Assign Materials")
         op.grid_columns = scene.bleliza_cols
         op.grid_rows = scene.bleliza_rows
+        op.mat_prefix = scene.bleliza_mat_prefix
+        op.tex_folder = scene.bleliza_tex_folder
+        op.tex_ext = scene.bleliza_tex_ext
+        op.tex_name_prefix = scene.bleliza_tex_name_prefix
+        op.tex_name_suffix = scene.bleliza_tex_name_suffix

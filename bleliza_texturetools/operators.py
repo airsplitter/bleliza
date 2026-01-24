@@ -701,12 +701,38 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
         description="Number of rows in the grid"
     )
 
+    mat_prefix: bpy.props.StringProperty(
+        name="Material Prefix",
+        default="zrhGroundSwisstopo2022-8k_"
+    )
+    
+    tex_folder: bpy.props.StringProperty(
+        name="Texture Folder",
+        default="//../dds/",
+        subtype='DIR_PATH'
+    )
+    
+    tex_ext: bpy.props.StringProperty(
+        name="Extension",
+        default=".dds"
+    )
+    
+    tex_name_prefix: bpy.props.StringProperty(
+        name="Filename Prefix",
+        default=""
+    )
+    
+    tex_name_suffix: bpy.props.StringProperty(
+        name="Filename Suffix",
+        default=""
+    )
+
     def execute(self, context):
         # --- Configuration ---
         columns = self.grid_columns
         rows = self.grid_rows
         TOTAL_FACES = columns * rows
-        TEXTURE_FOLDER = "//../dds/"
+        TEXTURE_FOLDER = self.tex_folder
         TEXTURE_SUFFIX = ".dds"
         MATERIAL_PREFIX = "zrhGroundSwisstopo2022-8k_"
 
@@ -747,14 +773,9 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             col = (face_index % columns) + 1
 
             # Determine file and material names
-            # File name format: "x_y_Luftbild2024.dds" - User said: "x_y_Luftbild2024.dds" in comments but logic used: f"{col}_{row}{TEXTURE_SUFFIX}"
-            # The user script logic: file_name = f"{col}_{row}{TEXTURE_SUFFIX}"
-            # Assuming TEXTURE_SUFFIX = ".dds", so "1_1.dds".
-            # Note: The user comment said "File name format: "x_y_Luftbild2024.dds"" but the code was `file_name = f"{col}_{row}{TEXTURE_SUFFIX}"`.
-            # I will stick to the CODE provided by the user.
-            
-            file_name = f"{col}_{row}{TEXTURE_SUFFIX}"
-            material_name = f"{MATERIAL_PREFIX}{col}-{row}"
+            # File name format: "{prefix}{col}_{row}{suffix}{ext}"
+            file_name = f"{self.tex_name_prefix}{col}_{row}{self.tex_name_suffix}{self.tex_ext}"
+            material_name = f"{self.mat_prefix}{col}-{row}"
 
             # 2. Create New Material
             mat = bpy.data.materials.get(material_name)

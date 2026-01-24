@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BleLiza",
     "author": "Christoph Maschowski",
-    "version": (1, 2),
+    "version": (1, 3),
     "blender": (2, 80, 0),
     "location": "Material Properties > My Material Tools",
     "description": "Adds image texture slots, materials generation and generates a node preset layout for ALIZA",
@@ -44,6 +44,37 @@ def register():
         default=10,
         min=1
     )
+    
+    bpy.types.Scene.bleliza_mat_prefix = bpy.props.StringProperty(
+        name="Material Prefix",
+        description="Prefix for the created material names",
+        default="zrhGroundSwisstopo2022-8k_"
+    )
+    
+    bpy.types.Scene.bleliza_tex_folder = bpy.props.StringProperty(
+        name="Texture Folder",
+        description="Folder containing the textures",
+        default="//../dds/",
+        subtype='DIR_PATH'
+    )
+    
+    bpy.types.Scene.bleliza_tex_ext = bpy.props.StringProperty(
+        name="Extension",
+        description="File extension (e.g. .dds)",
+        default=".dds"
+    )
+    
+    bpy.types.Scene.bleliza_tex_name_prefix = bpy.props.StringProperty(
+        name="Filename Prefix",
+        description="Prefix before coordinates in filename",
+        default=""
+    )
+    
+    bpy.types.Scene.bleliza_tex_name_suffix = bpy.props.StringProperty(
+        name="Filename Suffix",
+        description="Suffix after coordinates but before extension",
+        default=""
+    )
 
 def unregister():
     for cls in reversed(classes):
@@ -51,6 +82,11 @@ def unregister():
     
     del bpy.types.Scene.bleliza_rows
     del bpy.types.Scene.bleliza_cols
+    del bpy.types.Scene.bleliza_mat_prefix
+    del bpy.types.Scene.bleliza_tex_folder
+    del bpy.types.Scene.bleliza_tex_ext
+    del bpy.types.Scene.bleliza_tex_name_prefix
+    del bpy.types.Scene.bleliza_tex_name_suffix
 
 if __name__ == "__main__":
     register()
