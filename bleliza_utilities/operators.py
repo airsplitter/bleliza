@@ -1046,6 +1046,25 @@ class OBJECT_OT_bleliza_set_custom_property(bpy.types.Operator):
     )
     overwrite: bpy.props.BoolProperty(name="Overwrite", default=True)
 
+    @classmethod
+    def description(cls, context, properties):
+        if not properties:
+            return cls.bl_description
+            
+        if properties.prop_name == "aliza_cast_shadow":
+            if properties.target == 'ALL' and properties.prop_value == 0:
+                return "Adds aliza_cast_shadow=0 to all objects in the scene (only if the property doesn't exist)"
+            elif properties.target == 'SELECTED' and properties.prop_value == 1:
+                return "Sets aliza_cast_shadow=1 on selected objects (overwrites if exists)"
+        elif properties.prop_name == "aliza_marking":
+            return "Sets aliza_marking=1 on selected objects"
+        elif properties.prop_name == "aliza_tree":
+            return "Sets aliza_tree=1 on selected objects"
+        elif properties.prop_name == "aliza_layer":
+            return "Sets aliza_layer=0 on selected objects"
+            
+        return cls.bl_description
+
     def execute(self, context):
         if self.target == 'ALL':
             objects = context.scene.objects
