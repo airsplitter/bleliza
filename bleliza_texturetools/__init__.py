@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BleLiza",
     "author": "Christoph Maschowski",
-    "version": (1, 1),
+    "version": (1, 2),
     "blender": (2, 80, 0),
     "location": "Material Properties > My Material Tools",
     "description": "Adds image texture slots, materials generation and generates a node preset layout for ALIZA",
@@ -31,10 +31,26 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    
+    bpy.types.Scene.bleliza_rows = bpy.props.IntProperty(
+        name="Rows",
+        description="Number of rows for the grid",
+        default=10,
+        min=1
+    )
+    bpy.types.Scene.bleliza_cols = bpy.props.IntProperty(
+        name="Columns",
+        description="Number of columns for the grid",
+        default=10,
+        min=1
+    )
 
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+    
+    del bpy.types.Scene.bleliza_rows
+    del bpy.types.Scene.bleliza_cols
 
 if __name__ == "__main__":
     register()

@@ -39,4 +39,12 @@ class MATERIAL_PT_create_materials_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("object.create_and_assign_materials", text="Create & Assign Materials")
+        scene = context.scene
+        
+        col = layout.column()
+        col.prop(scene, "bleliza_cols", text="Columns")
+        col.prop(scene, "bleliza_rows", text="Rows")
+        
+        op = col.operator("object.create_and_assign_materials", text="Create & Assign Materials")
+        op.grid_columns = scene.bleliza_cols
+        op.grid_rows = scene.bleliza_rows
