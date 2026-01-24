@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BleLiza",
     "author": "Christoph Maschowski",
-    "version": (1, 3),
+    "version": (1, 4),
     "blender": (2, 80, 0),
     "location": "Material Properties > My Material Tools",
     "description": "Adds image texture slots, materials generation and generates a node preset layout for ALIZA",
@@ -23,9 +23,11 @@ classes = (
     operators.NODE_OT_replace_textures_script,
     operators.NODE_OT_remove_empty_textures_nodes_script,
     operators.NODE_OT_create_and_assign_materials,
+    operators.NODE_OT_snap_islands_to_terrain,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
     ui.MATERIAL_PT_create_materials_panel,
+    ui.BLELIZA_PT_object_tools,
 )
 
 def register():
@@ -75,6 +77,12 @@ def register():
         description="Suffix after coordinates but before extension",
         default=""
     )
+    
+    bpy.types.Scene.bleliza_terrain_obj = bpy.props.PointerProperty(
+        name="Terrain Object",
+        type=bpy.types.Object,
+        description="Terrain object to snap to"
+    )
 
 def unregister():
     for cls in reversed(classes):
@@ -87,6 +95,7 @@ def unregister():
     del bpy.types.Scene.bleliza_tex_ext
     del bpy.types.Scene.bleliza_tex_name_prefix
     del bpy.types.Scene.bleliza_tex_name_suffix
+    del bpy.types.Scene.bleliza_terrain_obj
 
 if __name__ == "__main__":
     register()

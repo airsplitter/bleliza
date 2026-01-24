@@ -1,6 +1,8 @@
 import bpy
 import os
 import re
+import bmesh
+from mathutils import Vector
 
 # Operator to add image texture nodes and create a node preset layout,
 # filling them with images from existing nodes if available.
@@ -856,4 +858,108 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             # tex_image.image.colorspace_settings.name = 'Non-Color'
 
         self.report({'INFO'}, "Materials created and assigned successfully.")
+        return {'FINISHED'}
+
+class NODE_OT_snap_islands_to_terrain(bpy.types.Operator):
+    bl_idname = "object.snap_islands_to_terrain"
+    bl_label = "Snap Islands to Terrain"
+    bl_description = "Snaps mesh islands vertically to a terrain object"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    terrain_name: bpy.props.StringProperty(
+        name="Terrain Object",
+        default="groundMiddle",
+        description="Name of the terrain object to snap to"
+    )
+
+    def execute(self, context):
+        terrain_name = self.terrain_name
+        
+        terrain = bpy.data.objects.get(terrain_name)
+        obj = context.active_object
+
+        if not terrain:
+            self.report({'ERROR'}, f"Object '{terrain_name}' not found!")
+            return {'CANCELLED'}
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Please select your merged mesh object.")
+            return {'CANCELLED'}
+
+        # Go to Object Mode to safely handle mesh data
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        
+        world_mat = obj.matrix_world
+        inv_world_mat = world_mat.inverted()
+        terr_inv_mat = terrain.matrix_world.inverted()
+
+        # --- ROBUST ISLAND DETECTION ---
+        processed_verts = set()
+        islands = []
+
+        for v in bm.verts:
+            if v not in processed_verts:
+                island_verts = []
+                stack = [v]
+                processed_verts.add(v)
+                
+                while stack:
+                    curr_v = stack.pop()
+                    island_verts.append(curr_v)
+                    for edge in curr_v.link_edges:
+                        other_v = edge.other_vert(curr_v)
+                        if other_v not in processed_verts:
+                            processed_verts.add(other_v)
+                            stack.append(other_v)
+                islands.append(island_verts)
+
+        if not islands:
+            self.report({'WARNING'}, "No geometry found in object.")
+            bm.free()
+            return {'CANCELLED'}
+
+        count = 0
+        for island_verts in islands:
+            # 1. Calculate world-space bottom center of this island
+            world_coords = [world_mat @ v.co for v in island_verts]
+            
+            min_z = min(co.z for co in world_coords)
+            avg_x = sum(co.x for co in world_coords) / len(world_coords)
+            avg_y = sum(co.y for co in world_coords) / len(world_coords)
+            
+            island_bottom_center = Vector((avg_x, avg_y, min_z))
+
+            # 2. Raycast from 1000 units above the island
+            ray_origin_world = island_bottom_center + Vector((0, 0, 1000))
+            
+            # Convert world ray to terrain-local space
+            local_start = terr_inv_mat @ ray_origin_world
+            local_dir = terr_inv_mat.to_quaternion() @ Vector((0, 0, -1))
+
+            success, hit_loc, hit_normal, face_index = terrain.ray_cast(local_start, local_dir)
+
+            if success:
+                world_hit_loc = terrain.matrix_world @ hit_loc
+                
+                # 3. Move the island
+                # The vertical distance to move:
+                z_offset_world = world_hit_loc.z - island_bottom_center.z
+                
+                # Convert world Z offset to object-local vector
+                # (Works even if the object is rotated)
+                local_offset = inv_world_mat.to_quaternion() @ Vector((0, 0, z_offset_world))
+                
+                for v in island_verts:
+                    v.co += local_offset
+                count += 1
+
+        # Update the mesh and viewport
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
+        
+        self.report({'INFO'}, f"Successfully snapped {count} islands to {terrain_name}")
         return {'FINISHED'}

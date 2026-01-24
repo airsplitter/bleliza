@@ -62,3 +62,22 @@ class MATERIAL_PT_create_materials_panel(bpy.types.Panel):
         op.tex_ext = scene.bleliza_tex_ext
         op.tex_name_prefix = scene.bleliza_tex_name_prefix
         op.tex_name_suffix = scene.bleliza_tex_name_suffix
+
+# Panel for object tools
+class BLELIZA_PT_object_tools(bpy.types.Panel):
+    bl_label = "Object Tools"
+    bl_idname = "BLELIZA_PT_object_tools"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "material"
+    bl_parent_id = "BLELIZA_MATERIAL_PT_parent"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        
+        layout.prop(scene, "bleliza_terrain_obj")
+        
+        op = layout.operator("object.snap_islands_to_terrain", text="Snap Islands to Terrain")
+        if scene.bleliza_terrain_obj:
+            op.terrain_name = scene.bleliza_terrain_obj.name
