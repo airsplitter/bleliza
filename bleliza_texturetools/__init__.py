@@ -9,8 +9,13 @@ bl_info = {
 }
 
 import bpy
+import importlib
 from . import operators
 from . import ui
+
+# Force reload of submodules to ensure new classes are picked up
+importlib.reload(operators)
+importlib.reload(ui)
 
 classes = (
     operators.NODE_OT_create_preset_2020,
