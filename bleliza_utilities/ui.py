@@ -29,6 +29,7 @@ class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
         layout.operator("object.remove_empty_textures_nodes", text="Remove empty textures nodes")
         layout.operator("node.set_texture_extend", text="Set Texture Extension to EXTEND")
         layout.operator("mesh.assign_random_materials_islands", text="Assign Random Materials to Islands")
+        layout.operator("node.set_materials_to_sat", text="Set materials to SAT")
         
         layout.separator()
         layout.label(text="Materials Filter:")

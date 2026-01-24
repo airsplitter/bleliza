@@ -1258,3 +1258,57 @@ class NODE_OT_assign_random_materials_selected_islands(bpy.types.Operator):
         bmesh.update_edit_mesh(obj.data)
         self.report({'INFO'}, f"Assigned materials to {count} connected components.")
         return {'FINISHED'}
+
+class NODE_OT_set_materials_to_sat(bpy.types.Operator):
+    bl_idname = "node.set_materials_to_sat"
+    bl_label = "Set materials to SAT"
+    bl_description = "Set material properties of all materials of the selected object to SAT"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Please select a MESH object.")
+            return {'CANCELLED'}
+            
+        if not obj.data.materials:
+            self.report({'WARNING'}, f"Selected object '{obj.name}' has no material slots.")
+            return {'CANCELLED'}
+
+        modified_count = 0
+        
+        for material in obj.data.materials:
+            if not material or not material.use_nodes:
+                continue
+                
+            nodes = material.node_tree.nodes
+            
+            principled_bsdf = None
+            for node in nodes:
+                if node.type == 'BSDF_PRINCIPLED':
+                    principled_bsdf = node
+                    break
+            
+            if principled_bsdf:
+                try:
+                    # Set Roughness to 1.0
+                    if 'Roughness' in principled_bsdf.inputs:
+                        principled_bsdf.inputs['Roughness'].default_value = 1.0
+                    
+                    # Set Specular to 0.0
+                    if 'Specular' in principled_bsdf.inputs:
+                        principled_bsdf.inputs['Specular'].default_value = 0.0
+                    elif 'Specular IOR Level' in principled_bsdf.inputs: # For Blender 4.0+
+                         principled_bsdf.inputs['Specular IOR Level'].default_value = 0.0
+                    
+                    modified_count += 1
+                except Exception as e:
+                    print(f"Warning: Error updating material {material.name}: {e}")
+
+        if modified_count == 0:
+            self.report({'WARNING'}, "No materials were modified (ensure Principled BSDF exists).")
+        else:
+            self.report({'INFO'}, f"Modified {modified_count} materials.")
+            
+        return {'FINISHED'}
