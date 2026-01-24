@@ -28,6 +28,7 @@ class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
         layout.operator("object.replace_textures_with_dds", text="Replace Texures")
         layout.operator("object.remove_empty_textures_nodes", text="Remove empty textures nodes")
         layout.operator("node.set_texture_extend", text="Set Texture Extension to EXTEND")
+        layout.operator("mesh.assign_random_materials_islands", text="Assign Random Materials to Islands")
 
 # Panel for creating materials
 class MATERIAL_PT_create_materials_panel(bpy.types.Panel):

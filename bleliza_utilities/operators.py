@@ -2,6 +2,7 @@ import bpy
 import os
 import re
 import bmesh
+import random
 from mathutils import Vector
 
 # Operator to add image texture nodes and create a node preset layout,
@@ -1110,4 +1111,69 @@ class NODE_OT_set_texture_extend(bpy.types.Operator):
                         count += 1
                         
         self.report({'INFO'}, f"Set extension to EXTEND for {count} texture nodes.")
+        return {'FINISHED'}
+
+class NODE_OT_assign_random_materials_islands(bpy.types.Operator):
+    bl_idname = "mesh.assign_random_materials_islands"
+    bl_label = "Assign Random Materials to Islands"
+    bl_description = "Assigns a random material index to each connected face group (island)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "No mesh object selected.")
+            return {'CANCELLED'}
+        
+        # Check materials
+        num_materials = len(obj.material_slots)
+        if num_materials == 0:
+            self.report({'WARNING'}, "No materials assigned to object.")
+            return {'CANCELLED'}
+
+        # Ensure Object Mode initially
+        if obj.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+        # Switch to Edit Mode to get BMesh
+        bpy.ops.object.mode_set(mode='EDIT')
+        
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
+        
+        # Deselect all
+        for face in bm.faces:
+            face.select = False
+        
+        visited = set()
+        face_groups = []
+
+        # Find islands
+        for face in bm.faces:
+            if face.index in visited:
+                continue
+            group = set()
+            stack = [face]
+            while stack:
+                f = stack.pop()
+                if f.index in visited:
+                    continue
+                visited.add(f.index)
+                group.add(f)
+                for e in f.edges:
+                    for linked_face in e.link_faces:
+                        if linked_face.index not in visited:
+                            stack.append(linked_face)
+            face_groups.append(group)
+        
+        # Assign random materials
+        for group in face_groups:
+            mat_index = random.randint(0, num_materials - 1)
+            for face in group:
+                face.material_index = mat_index
+        
+        bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        self.report({'INFO'}, f"Assigned materials to {len(face_groups)} islands.")
         return {'FINISHED'}

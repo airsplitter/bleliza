@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BleLIZA",
     "author": "Christoph Maschowski",
-    "version": (1, 9),
+    "version": (1, 10),
     "blender": (2, 80, 0),
     "location": "Material Properties > My Material Tools",
     "description": "Adds image texture slots, materials generation and generates a node preset layout for ALIZA",
@@ -27,6 +27,7 @@ classes = (
     operators.NODE_OT_select_flat_islands,
     operators.OBJECT_OT_bleliza_set_custom_property,
     operators.NODE_OT_set_texture_extend,
+    operators.NODE_OT_assign_random_materials_islands,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
     ui.MATERIAL_PT_create_materials_panel,
