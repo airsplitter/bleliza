@@ -1,10 +1,10 @@
 bl_info = {
     "name": "BleLiza",
     "author": "Christoph Maschowski",
-    "version": (1, 0),
+    "version": (1, 1),
     "blender": (2, 80, 0),
     "location": "Material Properties > My Material Tools",
-    "description": "Adds image texture slots and generates a node preset layout for ALIZA",
+    "description": "Adds image texture slots, materials generation and generates a node preset layout for ALIZA",
     "category": "Node",
 }
 
