@@ -2,7 +2,7 @@ import bpy
 
 # Custom parent panel to group our tools
 class BLELIZA_MATERIAL_PT_parent(bpy.types.Panel):
-    bl_label = "BleLiza Material Parameters"
+    bl_label = "BleLIZA Material Parameters"
     bl_idname = "BLELIZA_MATERIAL_PT_parent"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -65,12 +65,11 @@ class MATERIAL_PT_create_materials_panel(bpy.types.Panel):
 
 # Panel for object tools
 class BLELIZA_PT_object_tools(bpy.types.Panel):
-    bl_label = "Object Tools"
+    bl_label = "BleLIZA Object Tools"
     bl_idname = "BLELIZA_PT_object_tools"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_context = "material"
-    bl_parent_id = "BLELIZA_MATERIAL_PT_parent"
+    bl_context = "object"
 
     def draw(self, context):
         layout = self.layout
