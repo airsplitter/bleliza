@@ -1084,3 +1084,30 @@ class OBJECT_OT_bleliza_set_custom_property(bpy.types.Operator):
             
         self.report({'INFO'}, f"Set '{self.prop_name}' to {self.prop_value} on {count} objects.")
         return {'FINISHED'}
+
+class NODE_OT_set_texture_extend(bpy.types.Operator):
+    bl_idname = "node.set_texture_extend"
+    bl_label = "Set Image Extension to Extend"
+    bl_description = "Sets the extension mode of all image texture nodes in the active object's materials to 'EXTEND'"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj:
+            self.report({'ERROR'}, "No active object.")
+            return {'CANCELLED'}
+        
+        # Ensure Object Mode (optional but safer as per script)
+        if obj.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        count = 0
+        for material in obj.data.materials:
+            if material and material.use_nodes:
+                for node in material.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE':
+                        node.extension = 'EXTEND'
+                        count += 1
+                        
+        self.report({'INFO'}, f"Set extension to EXTEND for {count} texture nodes.")
+        return {'FINISHED'}

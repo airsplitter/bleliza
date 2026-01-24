@@ -27,6 +27,7 @@ class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
         layout.operator("node.create_preset_2024", text="Generate ALIZA Texture Preset from MSFS2024 Shader Mess ;-)")
         layout.operator("object.replace_textures_with_dds", text="Replace Texures")
         layout.operator("object.remove_empty_textures_nodes", text="Remove empty textures nodes")
+        layout.operator("node.set_texture_extend", text="Set Texture Extension to EXTEND")
 
 # Panel for creating materials
 class MATERIAL_PT_create_materials_panel(bpy.types.Panel):
