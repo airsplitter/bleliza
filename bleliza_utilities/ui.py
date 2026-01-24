@@ -75,8 +75,16 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
+        layout.label(text="Snap Islands:")
         layout.prop(scene, "bleliza_terrain_obj")
         
         op = layout.operator("object.snap_islands_to_terrain", text="Snap Islands to Terrain")
         if scene.bleliza_terrain_obj:
             op.terrain_name = scene.bleliza_terrain_obj.name
+            
+        layout.separator()
+        layout.label(text="Selection:")
+        layout.prop(scene, "bleliza_flat_threshold")
+        
+        op_sel = layout.operator("mesh.select_flat_islands", text="Select Flat Z Islands")
+        op_sel.threshold = scene.bleliza_flat_threshold

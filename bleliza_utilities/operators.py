@@ -963,3 +963,67 @@ class NODE_OT_snap_islands_to_terrain(bpy.types.Operator):
         
         self.report({'INFO'}, f"Successfully snapped {count} islands to {terrain_name}")
         return {'FINISHED'}
+
+class NODE_OT_select_flat_islands(bpy.types.Operator):
+    bl_idname = "mesh.select_flat_islands"
+    bl_label = "Select Flat Z Islands"
+    bl_description = "Selects mesh islands where Z max - Z min is within a threshold"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    threshold: bpy.props.FloatProperty(
+        name="Threshold",
+        default=1.0,
+        description="Z difference threshold"
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "No mesh object selected.")
+            return {'CANCELLED'}
+
+        # Ensure Edit Mode
+        if obj.mode != 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        mesh = bmesh.from_edit_mesh(obj.data)
+        mesh.verts.ensure_lookup_table()
+
+        bpy.ops.mesh.select_all(action='DESELECT')
+
+        visited = set()
+
+        for vert in mesh.verts:
+            if vert.index in visited:
+                continue
+
+            stack = [vert]
+            island = set()
+            z_values = []
+
+            while stack:
+                v = stack.pop()
+                if v.index in visited:
+                    continue
+                visited.add(v.index)
+                island.add(v)
+                z_values.append(v.co.z)
+
+                for edge in v.link_edges:
+                    other = edge.other_vert(v)
+                    if other.index not in visited:
+                        stack.append(other)
+            
+            if not z_values:
+                continue
+
+            z_min = min(z_values)
+            z_max = max(z_values)
+
+            if (z_max - z_min) <= self.threshold:
+                for v in island:
+                    v.select = True
+
+        bmesh.update_edit_mesh(obj.data)
+        self.report({'INFO'}, "Flat islands selected.")
+        return {'FINISHED'}

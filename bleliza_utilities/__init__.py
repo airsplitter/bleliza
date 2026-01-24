@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BleLIZA",
     "author": "Christoph Maschowski",
-    "version": (1, 5),
+    "version": (1, 6),
     "blender": (2, 80, 0),
     "location": "Material Properties > My Material Tools",
     "description": "Adds image texture slots, materials generation and generates a node preset layout for ALIZA",
@@ -24,6 +24,7 @@ classes = (
     operators.NODE_OT_remove_empty_textures_nodes_script,
     operators.NODE_OT_create_and_assign_materials,
     operators.NODE_OT_snap_islands_to_terrain,
+    operators.NODE_OT_select_flat_islands,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
     ui.MATERIAL_PT_create_materials_panel,
@@ -83,6 +84,13 @@ def register():
         type=bpy.types.Object,
         description="Terrain object to snap to"
     )
+    
+    bpy.types.Scene.bleliza_flat_threshold = bpy.props.FloatProperty(
+        name="Flat Threshold",
+        description="Max Z difference for an island to be selected",
+        default=1.0,
+        min=0.0
+    )
 
 def unregister():
     for cls in reversed(classes):
@@ -96,6 +104,7 @@ def unregister():
     del bpy.types.Scene.bleliza_tex_name_prefix
     del bpy.types.Scene.bleliza_tex_name_suffix
     del bpy.types.Scene.bleliza_terrain_obj
+    del bpy.types.Scene.bleliza_flat_threshold
 
 if __name__ == "__main__":
     register()
