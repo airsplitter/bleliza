@@ -11,6 +11,7 @@ class BLELIZA_MATERIAL_PT_parent(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         layout.label(text="Material Tools:")
+        layout.operator("object.remove_unused_materials", text="Remove Unused Materials from Object")
 
 # Panel nested inside our custom parent panel
 class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
@@ -30,7 +31,6 @@ class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
         layout.operator("node.set_texture_extend", text="Set Texture Extension to EXTEND")
         layout.operator("mesh.assign_random_materials_islands", text="Assign Random Materials to Islands")
         layout.operator("node.set_materials_to_sat", text="Set materials to SAT")
-        layout.operator("object.remove_unused_materials", text="Remove Unused Materials")
         
         layout.separator()
         layout.label(text="Materials Filter:")
