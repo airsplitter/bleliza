@@ -1312,3 +1312,25 @@ class NODE_OT_set_materials_to_sat(bpy.types.Operator):
             self.report({'INFO'}, f"Modified {modified_count} materials.")
             
         return {'FINISHED'}
+
+class OBJECT_OT_remove_unused_materials(bpy.types.Operator):
+    bl_idname = "object.remove_unused_materials"
+    bl_label = "Remove Unused Materials"
+    bl_description = "Removes material slots that are not assigned to any face on the selected object"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Please select a mesh object.")
+            return {'CANCELLED'}
+        
+        # Ensure Object Mode
+        if obj.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+        # Use built-in operator
+        bpy.ops.object.material_slot_remove_unused()
+        
+        self.report({'INFO'}, "Unused materials removed.")
+        return {'FINISHED'}
