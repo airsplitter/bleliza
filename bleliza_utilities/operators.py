@@ -766,6 +766,8 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             bpy.context.object.active_material_index = 0
             bpy.ops.object.material_slot_remove()
 
+        missing_textures = []
+
         # Create and assign materials
         # Sort faces so counting starts at the top-left tile, then goes right,
         # then the next row, etc. (row-major order in screen/top-view terms).
@@ -838,9 +840,10 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
                     abs_path = os.path.join(texture_folder_abs, file_name)
                     # We only load if it exists to avoid errors spamming
                     if os.path.exists(abs_path):
-                         img = bpy.data.images.load(abs_path, check_existing=True)
+                          img = bpy.data.images.load(abs_path, check_existing=True)
                     else:
-                          print(f"  Warning: File not found {abs_path}")
+                          missing_textures.append(abs_path)
+                          print(f"  Missing texture: {abs_path} (row={row}, col={col}, face_index={i})")
                           img = None
                 except RuntimeError as e:
                     print(f"  Warning: Could not load image {abs_path}. Error: {e}")
@@ -857,7 +860,24 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             # If the DDS is raw data, uncomment the line below:
             # tex_image.image.colorspace_settings.name = 'Non-Color'
 
-        self.report({'INFO'}, "Materials created and assigned successfully.")
+        if missing_textures:
+            print("--- Create & Assign Materials: missing texture summary ---")
+            print(f"Resolved texture folder: {texture_folder_abs}")
+            print(f"Expected filename pattern: {self.tex_name_prefix}{{row}}_{{col}}{self.tex_name_suffix}{tex_ext}")
+            preview = missing_textures[:10]
+            print(f"Missing {len(missing_textures)} texture(s). Showing up to 10:")
+            for p in preview:
+                print(f"  - {p}")
+            if len(missing_textures) > len(preview):
+                print(f"  ... and {len(missing_textures) - len(preview)} more")
+
+            # Show a visible error in Blender UI; details go to the console.
+            self.report(
+                {'ERROR'},
+                f"Missing {len(missing_textures)} texture(s). Check the console. Folder: {texture_folder_abs}",
+            )
+        else:
+            self.report({'INFO'}, "Materials created and assigned successfully.")
         return {'FINISHED'}
 
 class NODE_OT_snap_islands_to_terrain(bpy.types.Operator):
