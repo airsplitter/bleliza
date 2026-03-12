@@ -786,8 +786,12 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             col = i % columns
 
             # Determine file and material names
-            # File name format: "{prefix}{row}_{col}{suffix}{ext}"
-            file_name = f"{self.tex_name_prefix}{row}_{col}{self.tex_name_suffix}{tex_ext}"
+            # File name format: "{prefix}{row}<sep>{col}{suffix}{ext}"
+            # Some datasets use '_' while others use '-'; try both.
+            file_name_candidates = [
+                f"{self.tex_name_prefix}{row}-{col}{self.tex_name_suffix}{tex_ext}",
+                f"{self.tex_name_prefix}{row}_{col}{self.tex_name_suffix}{tex_ext}",
+            ]
             material_name = f"{self.mat_prefix}{row}-{col}"
 
             # 2. Create New Material
@@ -833,21 +837,26 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             tex_image.location = (-400, 0)
             
             # Load Image
-            # Check if image is already loaded
-            img = bpy.data.images.get(file_name)
-            if img is None:
+            img = None
+            abs_path = None
+            for file_name in file_name_candidates:
+                abs_path = os.path.join(texture_folder_abs, file_name)
+                if not os.path.exists(abs_path):
+                    continue
                 try:
-                    abs_path = os.path.join(texture_folder_abs, file_name)
-                    # We only load if it exists to avoid errors spamming
-                    if os.path.exists(abs_path):
-                          img = bpy.data.images.load(abs_path, check_existing=True)
-                    else:
-                          missing_textures.append(abs_path)
-                          print(f"  Missing texture: {abs_path} (row={row}, col={col}, face_index={i})")
-                          img = None
+                    img = bpy.data.images.load(abs_path, check_existing=True)
                 except RuntimeError as e:
                     print(f"  Warning: Could not load image {abs_path}. Error: {e}")
-                    img = None # Ensure img is None if loading fails
+                    img = None
+                break
+
+            if img is None:
+                missing_textures.append((row, col, i, tuple(file_name_candidates), texture_folder_abs))
+                print(
+                    "  Missing texture(s): "
+                    + ", ".join(file_name_candidates)
+                    + f" (folder={texture_folder_abs}, row={row}, col={col}, face_index={i})"
+                )
 
             tex_image.image = img
             
@@ -863,11 +872,15 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
         if missing_textures:
             print("--- Create & Assign Materials: missing texture summary ---")
             print(f"Resolved texture folder: {texture_folder_abs}")
-            print(f"Expected filename pattern: {self.tex_name_prefix}{{row}}_{{col}}{self.tex_name_suffix}{tex_ext}")
+            print(
+                "Expected filename patterns (tried in order):\n"
+                f"  1) {self.tex_name_prefix}{{row}}-{{col}}{self.tex_name_suffix}{tex_ext}\n"
+                f"  2) {self.tex_name_prefix}{{row}}_{{col}}{self.tex_name_suffix}{tex_ext}"
+            )
             preview = missing_textures[:10]
             print(f"Missing {len(missing_textures)} texture(s). Showing up to 10:")
-            for p in preview:
-                print(f"  - {p}")
+            for (row, col, face_index, candidates, folder) in preview:
+                print(f"  - row={row} col={col} face_index={face_index} folder={folder} candidates={list(candidates)}")
             if len(missing_textures) > len(preview):
                 print(f"  ... and {len(missing_textures) - len(preview)} more")
 
