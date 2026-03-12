@@ -735,9 +735,10 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
         columns = self.grid_columns
         rows = self.grid_rows
         TOTAL_FACES = columns * rows
-        TEXTURE_FOLDER = self.tex_folder
-        TEXTURE_SUFFIX = ".dds"
-        MATERIAL_PREFIX = "zrhGroundSwisstopo2022-8k_"
+        # Note: `tex_folder` can be absolute or Blender-relative ("//...").
+        # Always resolve it with `bpy.path.abspath()` before joining filenames.
+        texture_folder_abs = bpy.path.abspath(self.tex_folder)
+        tex_ext = self.tex_ext if self.tex_ext.startswith(".") else f".{self.tex_ext}"
 
         # 1. Check for a selected object
         obj = context.object
@@ -767,17 +768,17 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
 
         # Create and assign materials
         for face_index in range(TOTAL_FACES):
-            # Calculate (column, row) coordinates (1-based index)
+            # Calculate (column, row) coordinates (zero-based index)
             # This assumes the faces are indexed in a row-major order:
             # 0..cols-1 (row 1), cols..2*cols-1 (row 2), ...
-            # Row index 'y' (1 to rows)
-            # Column index 'x' (1 to columns)
-            row = (face_index // columns) + 1
-            col = (face_index % columns) + 1
+            # Row index 'y' (0 to rows-1)
+            # Column index 'x' (0 to columns-1)
+            row = (face_index // columns)
+            col = (face_index % columns)
 
             # Determine file and material names
             # File name format: "{prefix}{col}_{row}{suffix}{ext}"
-            file_name = f"{self.tex_name_prefix}{col}_{row}{self.tex_name_suffix}{self.tex_ext}"
+            file_name = f"{self.tex_name_prefix}{col}_{row}{self.tex_name_suffix}{tex_ext}"
             material_name = f"{self.mat_prefix}{col}-{row}"
 
             # 2. Create New Material
@@ -805,7 +806,7 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             links = mat.node_tree.links
             
             # Clear existing nodes for a clean slate (optional, but safer)
-            for node in nodes:
+            for node in list(nodes):
                 if node.name != 'Material Output' and node.name != 'Principled BSDF':
                     nodes.remove(node)
 
@@ -822,29 +823,20 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             tex_image = nodes.new('ShaderNodeTexImage')
             tex_image.location = (-400, 0)
             
-            # Set image path (relative path)
-            image_path = os.path.join(TEXTURE_FOLDER, file_name)
-            
-            # Blender's relative path handling starts with '//'
-            # The os.path.join will need to be careful with the leading '//'
-            if not image_path.startswith('//'):
-                image_path = '//' + image_path
-
             # Load Image
             # Check if image is already loaded
             img = bpy.data.images.get(file_name)
             if img is None:
                 try:
-                    # Use bpy.path.abspath to resolve the path relative to the .blend file
-                    abs_path = bpy.path.abspath(image_path)
+                    abs_path = os.path.join(texture_folder_abs, file_name)
                     # We only load if it exists to avoid errors spamming
                     if os.path.exists(abs_path):
                          img = bpy.data.images.load(abs_path, check_existing=True)
                     else:
-                         print(f"  Warning: File not found {abs_path}")
-                         img = None
+                          print(f"  Warning: File not found {abs_path}")
+                          img = None
                 except RuntimeError as e:
-                    print(f"  Warning: Could not load image {image_path}. Error: {e}")
+                    print(f"  Warning: Could not load image {abs_path}. Error: {e}")
                     img = None # Ensure img is None if loading fails
 
             tex_image.image = img
