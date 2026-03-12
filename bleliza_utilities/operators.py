@@ -781,18 +781,20 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
         )
 
         for i, poly in enumerate(polygons_sorted):
-            # Row index 'y' (0 to rows-1), Column index 'x' (0 to columns-1)
-            row = i // columns
-            col = i % columns
+            # Coordinate convention:
+            # - X = column index, left->right, 0..columns-1 (first number)
+            # - Y = row index, top->bottom,  0..rows-1    (second number)
+            row = i // columns  # y
+            col = i % columns   # x
 
             # Determine file and material names
-            # File name format: "{prefix}{row}<sep>{col}{suffix}{ext}"
+            # File name format: "{prefix}{col}<sep>{row}{suffix}{ext}"
             # Some datasets use '_' while others use '-'; try both.
             file_name_candidates = [
-                f"{self.tex_name_prefix}{row}-{col}{self.tex_name_suffix}{tex_ext}",
-                f"{self.tex_name_prefix}{row}_{col}{self.tex_name_suffix}{tex_ext}",
+                f"{self.tex_name_prefix}{col}-{row}{self.tex_name_suffix}{tex_ext}",
+                f"{self.tex_name_prefix}{col}_{row}{self.tex_name_suffix}{tex_ext}",
             ]
-            material_name = f"{self.mat_prefix}{row}-{col}"
+            material_name = f"{self.mat_prefix}{col}-{row}"
 
             # 2. Create New Material
             mat = bpy.data.materials.get(material_name)
@@ -874,8 +876,8 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             print(f"Resolved texture folder: {texture_folder_abs}")
             print(
                 "Expected filename patterns (tried in order):\n"
-                f"  1) {self.tex_name_prefix}{{row}}-{{col}}{self.tex_name_suffix}{tex_ext}\n"
-                f"  2) {self.tex_name_prefix}{{row}}_{{col}}{self.tex_name_suffix}{tex_ext}"
+                f"  1) {self.tex_name_prefix}{{col}}-{{row}}{self.tex_name_suffix}{tex_ext}\n"
+                f"  2) {self.tex_name_prefix}{{col}}_{{row}}{self.tex_name_suffix}{tex_ext}"
             )
             preview = missing_textures[:10]
             print(f"Missing {len(missing_textures)} texture(s). Showing up to 10:")
