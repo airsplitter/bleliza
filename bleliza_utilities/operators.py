@@ -61,7 +61,7 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
         if emissive_node and hasattr(emissive_node, "outputs") and emissive_node.outputs:
             emissive_value = emissive_node.outputs[0].default_value
             
-        detail_scale_node = node_tree.nodes.get("Detail UV Scale")
+        detail_scale_node = node_tree.nodes.get("Detail UV Sca  le")
         if detail_scale_node and hasattr(detail_scale_node, "outputs") and detail_scale_node.outputs:
             detail_scale_value = detail_scale_node.outputs[0].default_value
 
@@ -767,19 +767,26 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             bpy.ops.object.material_slot_remove()
 
         # Create and assign materials
-        for face_index in range(TOTAL_FACES):
-            # Calculate (column, row) coordinates (zero-based index)
-            # This assumes the faces are indexed in a row-major order:
-            # 0..cols-1 (row 1), cols..2*cols-1 (row 2), ...
-            # Row index 'y' (0 to rows-1)
-            # Column index 'x' (0 to columns-1)
-            row = (face_index // columns)
-            col = (face_index % columns)
+        # Sort faces so counting starts at the top-left tile, then goes right,
+        # then the next row, etc. (row-major order in screen/top-view terms).
+        # We use world-space polygon centers for robustness.
+        polygons_sorted = sorted(
+            obj.data.polygons,
+            key=lambda p: (
+                -(obj.matrix_world @ p.center).y,  # top (largest Y) first
+                (obj.matrix_world @ p.center).x,   # then left (smallest X) to right
+            ),
+        )
+
+        for i, poly in enumerate(polygons_sorted):
+            # Row index 'y' (0 to rows-1), Column index 'x' (0 to columns-1)
+            row = i // columns
+            col = i % columns
 
             # Determine file and material names
-            # File name format: "{prefix}{col}_{row}{suffix}{ext}"
-            file_name = f"{self.tex_name_prefix}{col}_{row}{self.tex_name_suffix}{tex_ext}"
-            material_name = f"{self.mat_prefix}{col}-{row}"
+            # File name format: "{prefix}{row}_{col}{suffix}{ext}"
+            file_name = f"{self.tex_name_prefix}{row}_{col}{self.tex_name_suffix}{tex_ext}"
+            material_name = f"{self.mat_prefix}{row}-{col}"
 
             # 2. Create New Material
             mat = bpy.data.materials.get(material_name)
@@ -798,7 +805,7 @@ class NODE_OT_create_and_assign_materials(bpy.types.Operator):
             slot_index = len(obj.material_slots) - 1
             
             # Assign the material slot index to the current face
-            obj.data.polygons[face_index].material_index = slot_index
+            poly.material_index = slot_index
             
 
             # 4. Configure Material Nodes (Albedo Texture)
