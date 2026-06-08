@@ -10,16 +10,23 @@ from mathutils import Vector
 class NODE_OT_create_preset_2020(bpy.types.Operator):
     bl_idname = "node.create_preset_2020"
     bl_label = "Create Node Preset 2020"
-    bl_description = "Creates image texture nodes with existing image values and arranges nodes in a preset layout"
+    bl_description = "Creates image texture nodes with existing image values and arranges nodes in a preset layout for all materials"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        mat = context.object.active_material
-        if not mat or not mat.use_nodes:
-            self.report({'WARNING'}, "Active object must have a material with nodes")
+        obj = context.object
+        if not obj or not obj.data.materials:
+            self.report({'WARNING'}, "Active object must have materials")
             return {'CANCELLED'}
         
-        node_tree = mat.node_tree
+        materials_processed = 0
+        
+        for mat in obj.data.materials:
+            if not mat or not mat.use_nodes:
+                continue
+            
+            materials_processed += 1
+            node_tree = mat.node_tree
         
         # Retrieve values from nodes that might exist before clearing.
         base_color_value = None
@@ -292,10 +299,10 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
         node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
         
         # Connect the output of the Mapping node to the Detail Image node's Vector input
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
-        self.report({'INFO'}, "Node preset layout created with existing texture values (if available)")
+        self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
         
 # Operator to add image texture nodes and create a node preset layout,
@@ -303,16 +310,23 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
 class NODE_OT_create_preset_2024(bpy.types.Operator):
     bl_idname = "node.create_preset_2024"
     bl_label = "Create Node Preset 2024"
-    bl_description = "Creates image texture nodes with existing image values and arranges nodes in a preset layout"
+    bl_description = "Creates image texture nodes with existing image values and arranges nodes in a preset layout for all materials"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        mat = context.object.active_material
-        if not mat or not mat.use_nodes:
-            self.report({'WARNING'}, "Active object must have a material with nodes")
+        obj = context.object
+        if not obj or not obj.data.materials:
+            self.report({'WARNING'}, "Active object must have materials")
             return {'CANCELLED'}
         
-        node_tree = mat.node_tree
+        materials_processed = 0
+        
+        for mat in obj.data.materials:
+            if not mat or not mat.use_nodes:
+                continue
+            
+            materials_processed += 1
+            node_tree = mat.node_tree
         
         # Retrieve values from nodes that might exist before clearing.
         base_color_value = None
@@ -576,11 +590,11 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
         # Connect the UV Map node output to the Mapping node's Vector input
         node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
         
-        # Connect the output of the Mapping node to the Detail Image node's Vector input
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+            # Connect the output of the Mapping node to the Detail Image node's Vector input
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
-        self.report({'INFO'}, "Node preset layout created with existing texture values (if available)")
+        self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
 
 class NODE_OT_replace_textures_script(bpy.types.Operator):
@@ -643,14 +657,19 @@ class NODE_OT_replace_textures_script(bpy.types.Operator):
 class NODE_OT_remove_empty_textures_nodes_script(bpy.types.Operator):
     bl_idname = "object.remove_empty_textures_nodes"
     bl_label = "Remove empty textures nodes"
-    bl_description = "Removes all unused image texture nodes"
+    bl_description = "Removes all unused image texture nodes from all materials of the selected object"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        obj = context.object
+        if not obj or not obj.data.materials:
+            self.report({'WARNING'}, "Active object must have materials")
+            return {'CANCELLED'}
+        
         removed_nodes_count = 0
 
-        for mat in bpy.data.materials:
-            if not mat.use_nodes:
+        for mat in obj.data.materials:
+            if not mat or not mat.use_nodes:
                 continue
 
             nodes = mat.node_tree.nodes
@@ -681,7 +700,7 @@ class NODE_OT_remove_empty_textures_nodes_script(bpy.types.Operator):
                 nodes.remove(node)
                 removed_nodes_count += 1
 
-        self.report({'INFO'}, f"Removed {removed_nodes_count} empty or unused nodes.")
+        self.report({'INFO'}, f"Removed {removed_nodes_count} empty or unused nodes from selected object.")
         return {'FINISHED'}
 
 class NODE_OT_create_and_assign_materials(bpy.types.Operator):
