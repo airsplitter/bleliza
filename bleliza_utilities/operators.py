@@ -655,6 +655,11 @@ class NODE_OT_remove_empty_textures_nodes_script(bpy.types.Operator):
         removed_nodes_count = 0
 
         for mat in obj.data.materials:
+            if not mat or not mat.use_nodes:
+                continue
+
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
             nodes_to_remove = set()
 
             for node in nodes:
