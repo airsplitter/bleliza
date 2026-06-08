@@ -295,12 +295,12 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
                         else:
                             mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
             
-                        # Connect the UV Map node output to the Mapping node's Vector input
-                        node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
+            # Connect the UV Map node output to the Mapping node's Vector input
+            node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
             
-                        # Connect the output of the Mapping node to the Detail Image node's Vector input
-                        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-                        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+            # Connect the output of the Mapping node to the Detail Image node's Vector input
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
@@ -586,11 +586,11 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
                         mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
                     else:
                         mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
-        
-                    # Connect the UV Map node output to the Mapping node's Vector input
-                    node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
-        
-                        # Connect the output of the Mapping node to the Detail Image node's Vector input
+            
+            # Connect the UV Map node output to the Mapping node's Vector input
+            node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
+            
+            # Connect the output of the Mapping node to the Detail Image node's Vector input
             node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
             node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
