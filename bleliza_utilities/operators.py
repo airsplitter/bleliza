@@ -335,6 +335,12 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
             elif len(base_color_value) == 4:
                 base_color_rgba = base_color_value  # It already has 4 sequences (RGBA)
         
+            # Initialize variables to None before conditional checks
+            metallic_value = None
+            roughness_value = None
+            emissive_value = None
+            detail_scale_value = None
+            
             metallic_node = node_tree.nodes.get("Metallic Factor")
             if metallic_node and hasattr(metallic_node, "outputs") and metallic_node.outputs:
                 metallic_value = metallic_node.outputs[0].default_value
