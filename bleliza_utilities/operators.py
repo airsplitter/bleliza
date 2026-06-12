@@ -299,8 +299,8 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
         node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
         
         # Connect the output of the Mapping node to the Detail Image node's Vector input
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
@@ -596,9 +596,9 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
         # Connect the UV Map node output to the Mapping node's Vector input
         node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
         
-            # Connect the output of the Mapping node to the Detail Image node's Vector input
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+        # Connect the output of the Mapping node to the Detail Image node's Vector input
+        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
