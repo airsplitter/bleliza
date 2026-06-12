@@ -28,279 +28,279 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
             materials_processed += 1
             node_tree = mat.node_tree
         
-        # Retrieve values from nodes that might exist before clearing.
-        base_color_value = None
-        metallic_value = None
-        roughness_value = None
-        emissive_value = None
-        detail_scale_value = None
+            # Retrieve values from nodes that might exist before clearing.
+            base_color_value = None
+            metallic_value = None
+            roughness_value = None
+            emissive_value = None
+            detail_scale_value = None
         
-        base_color_node = node_tree.nodes.get("Base Color RGB")
-        base_color_alpha_node = node_tree.nodes.get("Base Color A")
+            base_color_node = node_tree.nodes.get("Base Color RGB")
+            base_color_alpha_node = node_tree.nodes.get("Base Color A")
 
-        # Check if the node exists and has valid outputs
-        if base_color_node and hasattr(base_color_node, "outputs") and base_color_node.outputs:
-            base_color_value = base_color_node.outputs[0].default_value
-        else:
-            base_color_value = (1.0, 1.0, 1.0)  # Fallback to white
+            # Check if the node exists and has valid outputs
+            if base_color_node and hasattr(base_color_node, "outputs") and base_color_node.outputs:
+                base_color_value = base_color_node.outputs[0].default_value
+            else:
+                base_color_value = (1.0, 1.0, 1.0)  # Fallback to white
             
-        # Check if the node exists and has valid outputs
-        if base_color_alpha_node and hasattr(base_color_node, "outputs") and base_color_node.outputs:
-            base_color_alpha_value = base_color_alpha_node.outputs[0].default_value
-        else:
-            base_color_alpha_value = (1)  # Fallback to white
+            # Check if the node exists and has valid outputs
+            if base_color_alpha_node and hasattr(base_color_node, "outputs") and base_color_node.outputs:
+                base_color_alpha_value = base_color_alpha_node.outputs[0].default_value
+            else:
+                base_color_alpha_value = (1)  # Fallback to white
         
-        # Ensure base_color_value has an RGBA format by adding an alpha channel
-        if len(base_color_value) == 3:
-            base_color_rgba = (*base_color_value, *base_color_alpha_value)  # Adds the alpha value
-        elif len(base_color_value) == 4:
-            base_color_rgba = base_color_value  # It already has 4 sequences (RGBA)
+            # Ensure base_color_value has an RGBA format by adding an alpha channel
+            if len(base_color_value) == 3:
+                base_color_rgba = (*base_color_value, *base_color_alpha_value)  # Adds the alpha value
+            elif len(base_color_value) == 4:
+                base_color_rgba = base_color_value  # It already has 4 sequences (RGBA)
         
-        metallic_node = node_tree.nodes.get("Metallic Scale")
-        if metallic_node and hasattr(metallic_node, "outputs") and metallic_node.outputs:
-            metallic_value = metallic_node.outputs[0].default_value
+            metallic_node = node_tree.nodes.get("Metallic Scale")
+            if metallic_node and hasattr(metallic_node, "outputs") and metallic_node.outputs:
+                metallic_value = metallic_node.outputs[0].default_value
 
-        roughness_node = node_tree.nodes.get("Roughness Scale")
-        if roughness_node and hasattr(roughness_node, "outputs") and roughness_node.outputs:
-            roughness_value = roughness_node.outputs[0].default_value
+            roughness_node = node_tree.nodes.get("Roughness Scale")
+            if roughness_node and hasattr(roughness_node, "outputs") and roughness_node.outputs:
+                roughness_value = roughness_node.outputs[0].default_value
 
-        emissive_node = node_tree.nodes.get("Emissive Scale")
-        if emissive_node and hasattr(emissive_node, "outputs") and emissive_node.outputs:
-            emissive_value = emissive_node.outputs[0].default_value
+            emissive_node = node_tree.nodes.get("Emissive Scale")
+            if emissive_node and hasattr(emissive_node, "outputs") and emissive_node.outputs:
+                emissive_value = emissive_node.outputs[0].default_value
             
-        detail_scale_node = node_tree.nodes.get("Detail UV Sca  le")
-        if detail_scale_node and hasattr(detail_scale_node, "outputs") and detail_scale_node.outputs:
-            detail_scale_value = detail_scale_node.outputs[0].default_value
+            detail_scale_node = node_tree.nodes.get("Detail UV Sca  le")
+            if detail_scale_node and hasattr(detail_scale_node, "outputs") and detail_scale_node.outputs:
+                detail_scale_value = detail_scale_node.outputs[0].default_value
 
-        # Try to find existing nodes (if any) before clearing the node tree.
-        existing_base = node_tree.nodes.get("Base Color Texture")
-        existing_detail = node_tree.nodes.get("Detail Color(RGBA)")
-        existing_base_mat = node_tree.nodes.get("Occlusion(R) Roughness(G) Metallic(B)")
-        existing_detail_mat = node_tree.nodes.get("Detail Occlusion(R) Roughness(G) Metallic(B)")
-        existing_normal = node_tree.nodes.get("Normal Texture")
-        existing_normal_map_node = node_tree.nodes.get("Normal Map Sampler")
+            # Try to find existing nodes (if any) before clearing the node tree.
+            existing_base = node_tree.nodes.get("Base Color Texture")
+            existing_detail = node_tree.nodes.get("Detail Color(RGBA)")
+            existing_base_mat = node_tree.nodes.get("Occlusion(R) Roughness(G) Metallic(B)")
+            existing_detail_mat = node_tree.nodes.get("Detail Occlusion(R) Roughness(G) Metallic(B)")
+            existing_normal = node_tree.nodes.get("Normal Texture")
+            existing_normal_map_node = node_tree.nodes.get("Normal Map Sampler")
         
-        base_image = existing_base.image if existing_base and existing_base.image else None
-        detail_image = existing_detail.image if existing_detail and existing_detail.image else None
-        base_mat_image = existing_base_mat.image if existing_base_mat and existing_base_mat.image else None
-        detail_mat_image = existing_detail_mat.image if existing_detail_mat and existing_detail_mat.image else None
-        normal_image = existing_normal.image if existing_normal and existing_normal.image else None
-        # Get the 'Strength' value from the existing node if it has the input
-        if "Strength" in existing_normal_map_node.inputs:
-            strength_value_to_apply = existing_normal_map_node.inputs["Strength"].default_value
+            base_image = existing_base.image if existing_base and existing_base.image else None
+            detail_image = existing_detail.image if existing_detail and existing_detail.image else None
+            base_mat_image = existing_base_mat.image if existing_base_mat and existing_base_mat.image else None
+            detail_mat_image = existing_detail_mat.image if existing_detail_mat and existing_detail_mat.image else None
+            normal_image = existing_normal.image if existing_normal and existing_normal.image else None
+            # Get the 'Strength' value from the existing node if it has the input
+            if "Strength" in existing_normal_map_node.inputs:
+                strength_value_to_apply = existing_normal_map_node.inputs["Strength"].default_value
         
-        # Clear existing nodes (optional – here we rebuild the node tree)
-        for node in list(node_tree.nodes):
-            node_tree.nodes.remove(node)
+            # Clear existing nodes (optional – here we rebuild the node tree)
+            for node in list(node_tree.nodes):
+                node_tree.nodes.remove(node)
         
-        # Create Material Output node
-        output_node = node_tree.nodes.new(type="ShaderNodeOutputMaterial")
-        output_node.location = (500, 0)
+            # Create Material Output node
+            output_node = node_tree.nodes.new(type="ShaderNodeOutputMaterial")
+            output_node.location = (500, 0)
         
-        # Create Principled BSDF node
-        bsdf_node = node_tree.nodes.new(type="ShaderNodeBsdfPrincipled")
-        bsdf_node.location = (200, 0)
-        node_tree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
+            # Create Principled BSDF node
+            bsdf_node = node_tree.nodes.new(type="ShaderNodeBsdfPrincipled")
+            bsdf_node.location = (200, 0)
+            node_tree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
         
-        # Transfer value from "Base Color" to BSDF input "Base Color"
-        if base_color_value is not None:
-            bsdf_node.inputs["Base Color"].default_value = base_color_rgba
+            # Transfer value from "Base Color" to BSDF input "Base Color"
+            if base_color_value is not None:
+                bsdf_node.inputs["Base Color"].default_value = base_color_rgba
         
-        # Transfer value from "Metallic Factor" to BSDF input "Metallic"
-        if metallic_value is not None:
-            bsdf_node.inputs["Metallic"].default_value = metallic_value
+            # Transfer value from "Metallic Factor" to BSDF input "Metallic"
+            if metallic_value is not None:
+                bsdf_node.inputs["Metallic"].default_value = metallic_value
         
-        # Transfer value from "Roughness Factor" to BSDF input "Roughness"
-        if roughness_value is not None:
-            bsdf_node.inputs["Roughness"].default_value = roughness_value
+            # Transfer value from "Roughness Factor" to BSDF input "Roughness"
+            if roughness_value is not None:
+                bsdf_node.inputs["Roughness"].default_value = roughness_value
 
-        # For emission, assume there is a custom input called "Emission Strength" in the shader.
-        if emissive_value is not None and "Emission Strength" in bsdf_node.inputs:
-            bsdf_node.inputs["Emission Strength"].default_value = emissive_value
+            # For emission, assume there is a custom input called "Emission Strength" in the shader.
+            if emissive_value is not None and "Emission Strength" in bsdf_node.inputs:
+                bsdf_node.inputs["Emission Strength"].default_value = emissive_value
         
-        # Create Image Texture node for Base Color and assign image from existing node if available
-        base_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        base_color_node.location = (-500, 100)
-        base_color_node.name = "Base Color Texture"  # set name for clarity
-        if base_image:
-            base_color_node.image = base_image
-            base_color_node.image.colorspace_settings.name = 'sRGB'
+            # Create Image Texture node for Base Color and assign image from existing node if available
+            base_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            base_color_node.location = (-500, 100)
+            base_color_node.name = "Base Color Texture"  # set name for clarity
+            if base_image:
+                base_color_node.image = base_image
+                base_color_node.image.colorspace_settings.name = 'sRGB'
         
-        # Create another Image Texture node for Detail Color and assign image from existing node if available
-        detail_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        detail_color_node.location = (-500, -200)
-        detail_color_node.name = "Detail Color"
-        if detail_image:
-            detail_color_node.image = detail_image
-            detail_color_node.image.colorspace_settings.name = 'sRGB'
+            # Create another Image Texture node for Detail Color and assign image from existing node if available
+            detail_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            detail_color_node.location = (-500, -200)
+            detail_color_node.name = "Detail Color"
+            if detail_image:
+                detail_color_node.image = detail_image
+                detail_color_node.image.colorspace_settings.name = 'sRGB'
             
-        # Create Image Texture node for Base Color Material and assign image from existing node if available
-        base_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        base_mat_color_node.location = (-800, 0)
-        base_mat_color_node.name = "Base Color Material Texture"  # set name for clarity
-        if base_mat_image:
-            base_mat_color_node.image = base_mat_image
-            base_mat_color_node.image.colorspace_settings.name = 'Non-Color'
+            # Create Image Texture node for Base Color Material and assign image from existing node if available
+            base_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            base_mat_color_node.location = (-800, 0)
+            base_mat_color_node.name = "Base Color Material Texture"  # set name for clarity
+            if base_mat_image:
+                base_mat_color_node.image = base_mat_image
+                base_mat_color_node.image.colorspace_settings.name = 'Non-Color'
         
-        # Create another Image Texture node for Detail Color Material and assign image from existing node if available
-        detail_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        detail_mat_color_node.location = (-800, -300)
-        detail_mat_color_node.name = "Detail Color"
-        if detail_mat_image:
-            detail_mat_color_node.image = detail_mat_image
-            detail_mat_color_node.image.colorspace_settings.name = 'Non-Color'
+            # Create another Image Texture node for Detail Color Material and assign image from existing node if available
+            detail_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            detail_mat_color_node.location = (-800, -300)
+            detail_mat_color_node.name = "Detail Color"
+            if detail_mat_image:
+                detail_mat_color_node.image = detail_mat_image
+                detail_mat_color_node.image.colorspace_settings.name = 'Non-Color'
             
-        # Create another Image Texture node for Normal Map and assign image from existing node if available
-        normal_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        normal_color_node.location = (-500, -500)
-        normal_color_node.name = "Normal Image"
-        if normal_image:
-            normal_color_node.image = normal_image
-            normal_color_node.image.colorspace_settings.name = 'Non-Color'
+            # Create another Image Texture node for Normal Map and assign image from existing node if available
+            normal_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            normal_color_node.location = (-500, -500)
+            normal_color_node.name = "Normal Image"
+            if normal_image:
+                normal_color_node.image = normal_image
+                normal_color_node.image.colorspace_settings.name = 'Non-Color'
         
-        # Create a Normal Map node
-        if existing_normal_map_node:
-            normal_map_node = node_tree.nodes.new(type="ShaderNodeNormalMap")
-            normal_map_node.inputs["Strength"].default_value = strength_value_to_apply
-            normal_map_node.location = (-200, -500)
-        else:
-            normal_map_node = node_tree.nodes.new(type="ShaderNodeNormalMap")
-            normal_map_node.location = (-200, -500)
+            # Create a Normal Map node
+            if existing_normal_map_node:
+                normal_map_node = node_tree.nodes.new(type="ShaderNodeNormalMap")
+                normal_map_node.inputs["Strength"].default_value = strength_value_to_apply
+                normal_map_node.location = (-200, -500)
+            else:
+                normal_map_node = node_tree.nodes.new(type="ShaderNodeNormalMap")
+                normal_map_node.location = (-200, -500)
         
-        # Connect the Normal Map node to the Principled BSDF node's Normal input
-        node_tree.links.new(normal_map_node.outputs["Normal"], bsdf_node.inputs["Normal"])
+            # Connect the Normal Map node to the Principled BSDF node's Normal input
+            node_tree.links.new(normal_map_node.outputs["Normal"], bsdf_node.inputs["Normal"])
         
-        # Link the normal image texture node into the Normal Map node's "Color" input
-        node_tree.links.new(normal_color_node.outputs["Color"], normal_map_node.inputs["Color"])
+            # Link the normal image texture node into the Normal Map node's "Color" input
+            node_tree.links.new(normal_color_node.outputs["Color"], normal_map_node.inputs["Color"])
         
-        # Check if base and detail textures have images
-        has_base_image = base_color_node.image is not None
-        has_detail_image = detail_color_node.image is not None
+            # Check if base and detail textures have images
+            has_base_image = base_color_node.image is not None
+            has_detail_image = detail_color_node.image is not None
         
-        if has_base_image and has_detail_image:
-            # Create a Mix Color node for albedo images
-            mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
-            mix_node.location = (-200, 100)
-            mix_node.blend_type = 'MIX'  # Use MIX mode (default)
-            mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
-            # Link the two albedo image texture nodes into the MixRGB node
-            node_tree.links.new(base_color_node.outputs["Color"], mix_node.inputs[1])
-            node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
-            # Link the output of the Mix Color node to the Principled BSDF's Base Color input
-            node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-        elif has_base_image:
-            node_tree.links.new(base_color_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-        elif has_detail_image:
-            # Create a Mix Color node for albedo images
-            mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
-            mix_node.location = (0, 100)
-            mix_node.blend_type = 'MIX'  # Use MIX mode (default)
-            mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
-            color_input = node_tree.nodes.new(type="ShaderNodeRGB")
-            color_input.location = (-200, 100)
-            color_input.label = "Base Color Input"  # Name it for clarity
-            # Set the color value (RGBA format: (R, G, B, Alpha))
-            color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
-            node_tree.links.new(color_input.outputs["Color"], mix_node.inputs[1])  # Connect to input 1
-            node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
-            # Link the output of the Mix Color node to the Principled BSDF's Base Color input
-            node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-        else:
-            color_input = node_tree.nodes.new(type="ShaderNodeRGB")
-            color_input.label = "Base Color Input"  # Name it for clarity
-            color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
-            node_tree.links.new(color_input.outputs["Color"], bsdf_node.inputs["Base Color"])
+            if has_base_image and has_detail_image:
+                # Create a Mix Color node for albedo images
+                mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
+                mix_node.location = (-200, 100)
+                mix_node.blend_type = 'MIX'  # Use MIX mode (default)
+                mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
+                # Link the two albedo image texture nodes into the MixRGB node
+                node_tree.links.new(base_color_node.outputs["Color"], mix_node.inputs[1])
+                node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
+                # Link the output of the Mix Color node to the Principled BSDF's Base Color input
+                node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+            elif has_base_image:
+                node_tree.links.new(base_color_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+            elif has_detail_image:
+                # Create a Mix Color node for albedo images
+                mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
+                mix_node.location = (0, 100)
+                mix_node.blend_type = 'MIX'  # Use MIX mode (default)
+                mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
+                color_input = node_tree.nodes.new(type="ShaderNodeRGB")
+                color_input.location = (-200, 100)
+                color_input.label = "Base Color Input"  # Name it for clarity
+                # Set the color value (RGBA format: (R, G, B, Alpha))
+                color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
+                node_tree.links.new(color_input.outputs["Color"], mix_node.inputs[1])  # Connect to input 1
+                node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
+                # Link the output of the Mix Color node to the Principled BSDF's Base Color input
+                node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+            else:
+                color_input = node_tree.nodes.new(type="ShaderNodeRGB")
+                color_input.label = "Base Color Input"  # Name it for clarity
+                color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
+                node_tree.links.new(color_input.outputs["Color"], bsdf_node.inputs["Base Color"])
         
-        # Check if base and detail material textures have images
-        has_base_mat_image = base_mat_color_node.image is not None
-        has_detail_mat_image = detail_mat_color_node.image is not None
+            # Check if base and detail material textures have images
+            has_base_mat_image = base_mat_color_node.image is not None
+            has_detail_mat_image = detail_mat_color_node.image is not None
         
-        if has_base_mat_image and has_detail_mat_image:
-            # Create a Mix Color node for material images
-            mix_mat_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
-            mix_mat_node.location = (-200, -150)
-            mix_mat_node.blend_type = 'MIX'  # Use MIX mode (default)
-            mix_mat_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
+            if has_base_mat_image and has_detail_mat_image:
+                # Create a Mix Color node for material images
+                mix_mat_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
+                mix_mat_node.location = (-200, -150)
+                mix_mat_node.blend_type = 'MIX'  # Use MIX mode (default)
+                mix_mat_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
         
-            # Link the two material image texture nodes into the MixRGB node
-            node_tree.links.new(base_mat_color_node.outputs["Color"], mix_mat_node.inputs[1])
-            node_tree.links.new(detail_mat_color_node.outputs["Color"], mix_mat_node.inputs[2])
+                # Link the two material image texture nodes into the MixRGB node
+                node_tree.links.new(base_mat_color_node.outputs["Color"], mix_mat_node.inputs[1])
+                node_tree.links.new(detail_mat_color_node.outputs["Color"], mix_mat_node.inputs[2])
             
-            # Create a Separate Color node
-            separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
-            separate_node.location = (0, -150)  # adjust the location as needed
+                # Create a Separate Color node
+                separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
+                separate_node.location = (0, -150)  # adjust the location as needed
             
-            # Link the output of the Mix Color material node to the Separate Color node input
-            node_tree.links.new(mix_mat_node.outputs["Color"], separate_node.inputs["Color"])
+                # Link the output of the Mix Color material node to the Separate Color node input
+                node_tree.links.new(mix_mat_node.outputs["Color"], separate_node.inputs["Color"])
             
-            # Connect the Green channel from the Separate Color node to the Metallic input.
-            node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
+                # Connect the Green channel from the Separate Color node to the Metallic input.
+                node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
             
-            # Connect the Red channel from the Separate Color node to the Roughness input.
-            node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
-        elif has_base_mat_image:
-            # Create a Separate Color node
-            separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
-            separate_node.location = (0, -150)  # adjust the location as needed
+                # Connect the Red channel from the Separate Color node to the Roughness input.
+                node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
+            elif has_base_mat_image:
+                # Create a Separate Color node
+                separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
+                separate_node.location = (0, -150)  # adjust the location as needed
             
-            # Link the output of the Base Color material node to the Separate Color node input
-            node_tree.links.new(base_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
+                # Link the output of the Base Color material node to the Separate Color node input
+                node_tree.links.new(base_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
             
-            # Connect the Green channel from the Separate Color node to the Metallic input.
-            node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
+                # Connect the Green channel from the Separate Color node to the Metallic input.
+                node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
             
-            # Connect the Red channel from the Separate Color node to the Roughness input.
-            node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
-        elif has_detail_mat_image:
-            # Create a Separate Color node
-            separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
-            separate_node.location = (0, -150)  # adjust the location as needed
+                # Connect the Red channel from the Separate Color node to the Roughness input.
+                node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
+            elif has_detail_mat_image:
+                # Create a Separate Color node
+                separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
+                separate_node.location = (0, -150)  # adjust the location as needed
             
-            # Link the output of the Detail Color material node to the Separate Color node input
-            node_tree.links.new(detail_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
+                # Link the output of the Detail Color material node to the Separate Color node input
+                node_tree.links.new(detail_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
             
-            # Connect the Green channel from the Separate Color node to the Metallic input.
-            node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
+                # Connect the Green channel from the Separate Color node to the Metallic input.
+                node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
             
-            # Connect the Red channel from the Separate Color node to the Roughness input.
-            node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
+                # Connect the Red channel from the Separate Color node to the Roughness input.
+                node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
         
-        # Create a UV Map node
-        obj = context.object
-        if hasattr(obj.data, "uv_layers") and obj.data.uv_layers:
-            first_uv = obj.data.uv_layers[0].name
-        else:
-            first_uv = "UVMap"  # fallback if no UV maps exist
-        uv_map_node = node_tree.nodes.new(type="ShaderNodeUVMap")
-        uv_map_node.location = (-1200, 0)  # adjust location as needed
-        uv_map_node.uv_map = first_uv  # use the first UV map name from the object
+            # Create a UV Map node
+            obj = context.object
+            if hasattr(obj.data, "uv_layers") and obj.data.uv_layers:
+                first_uv = obj.data.uv_layers[0].name
+            else:
+                first_uv = "UVMap"  # fallback if no UV maps exist
+            uv_map_node = node_tree.nodes.new(type="ShaderNodeUVMap")
+            uv_map_node.location = (-1200, 0)  # adjust location as needed
+            uv_map_node.uv_map = first_uv  # use the first UV map name from the object
         
-        # Connect the UV Map node output to the Vector input of each image texture node
-        node_tree.links.new(uv_map_node.outputs["UV"], base_color_node.inputs["Vector"])
+            # Connect the UV Map node output to the Vector input of each image texture node
+            node_tree.links.new(uv_map_node.outputs["UV"], base_color_node.inputs["Vector"])
         
-        node_tree.links.new(uv_map_node.outputs["UV"], base_mat_color_node.inputs["Vector"])
-        node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
-        node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
+            node_tree.links.new(uv_map_node.outputs["UV"], base_mat_color_node.inputs["Vector"])
+            node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
+            node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
         
-        # --- START OF ADJUSTED CODE ---
+            # --- START OF ADJUSTED CODE ---
         
-        # Create a Mapping node
-        mapping_node = node_tree.nodes.new(type="ShaderNodeMapping")
-        mapping_node.location = (-1000, -300)  # Adjust location as needed
-        mapping_node.vector_type = 'TEXTURE' # Set to texture to expose scale
+            # Create a Mapping node
+            mapping_node = node_tree.nodes.new(type="ShaderNodeMapping")
+            mapping_node.location = (-1000, -300)  # Adjust location as needed
+            mapping_node.vector_type = 'TEXTURE' # Set to texture to expose scale
         
-        # Set the scale values
-        if detail_scale_value is not None:
-            mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
-        else:
-            mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
+            # Set the scale values
+            if detail_scale_value is not None:
+                mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
+            else:
+                mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
         
-        # Connect the UV Map node output to the Mapping node's Vector input
-        node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
+            # Connect the UV Map node output to the Mapping node's Vector input
+            node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
         
-        # Connect the output of the Mapping node to the Detail Image node's Vector input
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+            # Connect the output of the Mapping node to the Detail Image node's Vector input
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
@@ -328,277 +328,277 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
             materials_processed += 1
             node_tree = mat.node_tree
         
-        # Retrieve values from nodes that might exist before clearing.
-        base_color_value = None
-        metallic_value = None
-        roughness_value = None
-        emissive_value = None
-        detail_scale_value = None
+            # Retrieve values from nodes that might exist before clearing.
+            base_color_value = None
+            metallic_value = None
+            roughness_value = None
+            emissive_value = None
+            detail_scale_value = None
         
-        base_color_node = node_tree.nodes.get("Base Color")
+            base_color_node = node_tree.nodes.get("Base Color")
 
-        # Check if the node exists and has valid outputs
-        if base_color_node and hasattr(base_color_node, "outputs") and base_color_node.outputs:
-            base_color_value = base_color_node.outputs[0].default_value
-        else:
-            base_color_value = (1.0, 1.0, 1.0)  # Fallback to white
+            # Check if the node exists and has valid outputs
+            if base_color_node and hasattr(base_color_node, "outputs") and base_color_node.outputs:
+                base_color_value = base_color_node.outputs[0].default_value
+            else:
+                base_color_value = (1.0, 1.0, 1.0)  # Fallback to white
         
-        # Ensure base_color_value has an RGBA format by adding an alpha channel
-        if len(base_color_value) == 3:
-            base_color_rgba = (*base_color_value, 1.0)  # Adds 1.0 as the alpha value
-        elif len(base_color_value) == 4:
-            base_color_rgba = base_color_value  # It already has 4 sequences (RGBA)
+            # Ensure base_color_value has an RGBA format by adding an alpha channel
+            if len(base_color_value) == 3:
+                base_color_rgba = (*base_color_value, 1.0)  # Adds 1.0 as the alpha value
+            elif len(base_color_value) == 4:
+                base_color_rgba = base_color_value  # It already has 4 sequences (RGBA)
         
-        # Initialize variables to None before conditional checks
-        metallic_value = None
-        roughness_value = None
-        emissive_value = None
-        detail_scale_value = None
+            # Initialize variables to None before conditional checks
+            metallic_value = None
+            roughness_value = None
+            emissive_value = None
+            detail_scale_value = None
         
-        metallic_node = node_tree.nodes.get("Metallic Factor")
-        if metallic_node and hasattr(metallic_node, "outputs") and metallic_node.outputs:
-            metallic_value = metallic_node.outputs[0].default_value
+            metallic_node = node_tree.nodes.get("Metallic Factor")
+            if metallic_node and hasattr(metallic_node, "outputs") and metallic_node.outputs:
+                metallic_value = metallic_node.outputs[0].default_value
 
-        roughness_node = node_tree.nodes.get("Roughness Factor")
-        if roughness_node and hasattr(roughness_node, "outputs") and roughness_node.outputs:
-            roughness_value = roughness_node.outputs[0].default_value
+            roughness_node = node_tree.nodes.get("Roughness Factor")
+            if roughness_node and hasattr(roughness_node, "outputs") and roughness_node.outputs:
+                roughness_value = roughness_node.outputs[0].default_value
 
-        emissive_node = node_tree.nodes.get("Emissive Scale")
-        if emissive_node and hasattr(emissive_node, "outputs") and emissive_node.outputs:
-            emissive_value = emissive_node.outputs[0].default_value
+            emissive_node = node_tree.nodes.get("Emissive Scale")
+            if emissive_node and hasattr(emissive_node, "outputs") and emissive_node.outputs:
+                emissive_value = emissive_node.outputs[0].default_value
             
-        detail_scale_node = node_tree.nodes.get("Detail UV Scale")
-        if detail_scale_node and hasattr(detail_scale_node, "outputs") and detail_scale_node.outputs:
-            detail_scale_value = detail_scale_node.outputs[0].default_value
+            detail_scale_node = node_tree.nodes.get("Detail UV Scale")
+            if detail_scale_node and hasattr(detail_scale_node, "outputs") and detail_scale_node.outputs:
+                detail_scale_value = detail_scale_node.outputs[0].default_value
         
-        # Retrieve the normal scale value from an existing node named "Normal Scale"
-        normal_scale_value = None
-        normal_scale_node = node_tree.nodes.get("Normal Scale")
-        if normal_scale_node and hasattr(normal_scale_node, "outputs") and normal_scale_node.outputs:
-            normal_scale_value = normal_scale_node.outputs[0].default_value
+            # Retrieve the normal scale value from an existing node named "Normal Scale"
+            normal_scale_value = None
+            normal_scale_node = node_tree.nodes.get("Normal Scale")
+            if normal_scale_node and hasattr(normal_scale_node, "outputs") and normal_scale_node.outputs:
+                normal_scale_value = normal_scale_node.outputs[0].default_value
         
-        # Try to find existing nodes (if any) before clearing the node tree.
-        existing_base = node_tree.nodes.get("Base Color Texture (RGBA)")
-        existing_detail = node_tree.nodes.get("Detail Color (RGB), Alpha (A)")
-        existing_base_mat = node_tree.nodes.get("Occlusion (R), Roughness (G), Metallic (B)")
-        existing_detail_mat = node_tree.nodes.get("Detail Occlusion (R), Roughness (G), Metallic (B)")
-        existing_normal = node_tree.nodes.get("Normal Texture (RGB)")
+            # Try to find existing nodes (if any) before clearing the node tree.
+            existing_base = node_tree.nodes.get("Base Color Texture (RGBA)")
+            existing_detail = node_tree.nodes.get("Detail Color (RGB), Alpha (A)")
+            existing_base_mat = node_tree.nodes.get("Occlusion (R), Roughness (G), Metallic (B)")
+            existing_detail_mat = node_tree.nodes.get("Detail Occlusion (R), Roughness (G), Metallic (B)")
+            existing_normal = node_tree.nodes.get("Normal Texture (RGB)")
         
-        base_image = existing_base.image if existing_base and existing_base.image else None
-        detail_image = existing_detail.image if existing_detail and existing_detail.image else None
-        base_mat_image = existing_base_mat.image if existing_base_mat and existing_base_mat.image else None
-        detail_mat_image = existing_detail_mat.image if existing_detail_mat and existing_detail_mat.image else None
-        normal_image = existing_normal.image if existing_normal and existing_normal.image else None
+            base_image = existing_base.image if existing_base and existing_base.image else None
+            detail_image = existing_detail.image if existing_detail and existing_detail.image else None
+            base_mat_image = existing_base_mat.image if existing_base_mat and existing_base_mat.image else None
+            detail_mat_image = existing_detail_mat.image if existing_detail_mat and existing_detail_mat.image else None
+            normal_image = existing_normal.image if existing_normal and existing_normal.image else None
         
-        # Clear existing nodes (optional – here we rebuild the node tree)
-        for node in list(node_tree.nodes):
-            node_tree.nodes.remove(node)
+            # Clear existing nodes (optional – here we rebuild the node tree)
+            for node in list(node_tree.nodes):
+                node_tree.nodes.remove(node)
         
-        # Create Material Output node
-        output_node = node_tree.nodes.new(type="ShaderNodeOutputMaterial")
-        output_node.location = (500, 0)
+            # Create Material Output node
+            output_node = node_tree.nodes.new(type="ShaderNodeOutputMaterial")
+            output_node.location = (500, 0)
         
-        # Create Principled BSDF node
-        bsdf_node = node_tree.nodes.new(type="ShaderNodeBsdfPrincipled")
-        bsdf_node.location = (200, 0)
-        node_tree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
+            # Create Principled BSDF node
+            bsdf_node = node_tree.nodes.new(type="ShaderNodeBsdfPrincipled")
+            bsdf_node.location = (200, 0)
+            node_tree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
         
-        # Transfer value from "Base Color" to BSDF input "Base Color"
-        if base_color_value is not None:
-            bsdf_node.inputs["Base Color"].default_value = base_color_rgba
+            # Transfer value from "Base Color" to BSDF input "Base Color"
+            if base_color_value is not None:
+                bsdf_node.inputs["Base Color"].default_value = base_color_rgba
         
-        # Transfer value from "Metallic Factor" to BSDF input "Metallic"
-        if metallic_value is not None:
-            bsdf_node.inputs["Metallic"].default_value = metallic_value
+            # Transfer value from "Metallic Factor" to BSDF input "Metallic"
+            if metallic_value is not None:
+                bsdf_node.inputs["Metallic"].default_value = metallic_value
         
-        # Transfer value from "Roughness Factor" to BSDF input "Roughness"
-        if roughness_value is not None:
-            bsdf_node.inputs["Roughness"].default_value = roughness_value
+            # Transfer value from "Roughness Factor" to BSDF input "Roughness"
+            if roughness_value is not None:
+                bsdf_node.inputs["Roughness"].default_value = roughness_value
 
-        # For emission, assume there is a custom input called "Emission Strength" in the shader.
-        if emissive_value is not None and "Emission Strength" in bsdf_node.inputs:
-            bsdf_node.inputs["Emission Strength"].default_value = emissive_value
+            # For emission, assume there is a custom input called "Emission Strength" in the shader.
+            if emissive_value is not None and "Emission Strength" in bsdf_node.inputs:
+                bsdf_node.inputs["Emission Strength"].default_value = emissive_value
         
-        # Create Image Texture node for Base Color and assign image from existing node if available
-        base_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        base_color_node.location = (-500, 100)
-        base_color_node.name = "Base Color Texture"  # set name for clarity
-        if base_image:
-            base_color_node.image = base_image
-            base_color_node.image.colorspace_settings.name = 'sRGB'
+            # Create Image Texture node for Base Color and assign image from existing node if available
+            base_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            base_color_node.location = (-500, 100)
+            base_color_node.name = "Base Color Texture"  # set name for clarity
+            if base_image:
+                base_color_node.image = base_image
+                base_color_node.image.colorspace_settings.name = 'sRGB'
         
-        # Create another Image Texture node for Detail Color and assign image from existing node if available
-        detail_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        detail_color_node.location = (-500, -200)
-        detail_color_node.name = "Detail Color"
-        if detail_image:
-            detail_color_node.image = detail_image
-            detail_color_node.image.colorspace_settings.name = 'sRGB'
+            # Create another Image Texture node for Detail Color and assign image from existing node if available
+            detail_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            detail_color_node.location = (-500, -200)
+            detail_color_node.name = "Detail Color"
+            if detail_image:
+                detail_color_node.image = detail_image
+                detail_color_node.image.colorspace_settings.name = 'sRGB'
             
-        # Create Image Texture node for Base Color Material and assign image from existing node if available
-        base_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        base_mat_color_node.location = (-800, 0)
-        base_mat_color_node.name = "Base Color Material Texture"  # set name for clarity
-        if base_mat_image:
-            base_mat_color_node.image = base_mat_image
-            base_mat_color_node.image.colorspace_settings.name = 'Non-Color'
+            # Create Image Texture node for Base Color Material and assign image from existing node if available
+            base_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            base_mat_color_node.location = (-800, 0)
+            base_mat_color_node.name = "Base Color Material Texture"  # set name for clarity
+            if base_mat_image:
+                base_mat_color_node.image = base_mat_image
+                base_mat_color_node.image.colorspace_settings.name = 'Non-Color'
         
-        # Create another Image Texture node for Detail Color Material and assign image from existing node if available
-        detail_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        detail_mat_color_node.location = (-800, -300)
-        detail_mat_color_node.name = "Detail Color"
-        if detail_mat_image:
-            detail_mat_color_node.image = detail_mat_image
-            detail_mat_color_node.image.colorspace_settings.name = 'Non-Color'
+            # Create another Image Texture node for Detail Color Material and assign image from existing node if available
+            detail_mat_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            detail_mat_color_node.location = (-800, -300)
+            detail_mat_color_node.name = "Detail Color"
+            if detail_mat_image:
+                detail_mat_color_node.image = detail_mat_image
+                detail_mat_color_node.image.colorspace_settings.name = 'Non-Color'
             
-        # Create another Image Texture node for Normal Map and assign image from existing node if available
-        normal_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
-        normal_color_node.location = (-500, -500)
-        normal_color_node.name = "Normal Image"
-        if normal_image:
-            normal_color_node.image = normal_image
-            normal_color_node.image.colorspace_settings.name = 'Non-Color'
+            # Create another Image Texture node for Normal Map and assign image from existing node if available
+            normal_color_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+            normal_color_node.location = (-500, -500)
+            normal_color_node.name = "Normal Image"
+            if normal_image:
+                normal_color_node.image = normal_image
+                normal_color_node.image.colorspace_settings.name = 'Non-Color'
         
-        # Create a Normal Map node
-        normal_map_node = node_tree.nodes.new(type="ShaderNodeNormalMap")
-        normal_map_node.location = (-200, -500)
-        if normal_scale_value is not None:
-            normal_map_node.inputs["Strength"].default_value = normal_scale_value
+            # Create a Normal Map node
+            normal_map_node = node_tree.nodes.new(type="ShaderNodeNormalMap")
+            normal_map_node.location = (-200, -500)
+            if normal_scale_value is not None:
+                normal_map_node.inputs["Strength"].default_value = normal_scale_value
         
-        # Connect the Normal Map node to the Principled BSDF node's Normal input
-        node_tree.links.new(normal_map_node.outputs["Normal"], bsdf_node.inputs["Normal"])
+            # Connect the Normal Map node to the Principled BSDF node's Normal input
+            node_tree.links.new(normal_map_node.outputs["Normal"], bsdf_node.inputs["Normal"])
         
-        # Link the normal image texture node into the Normal Map node's "Color" input
-        node_tree.links.new(normal_color_node.outputs["Color"], normal_map_node.inputs["Color"])
+            # Link the normal image texture node into the Normal Map node's "Color" input
+            node_tree.links.new(normal_color_node.outputs["Color"], normal_map_node.inputs["Color"])
         
-        # Check if base and detail textures have images
-        has_base_image = base_color_node.image is not None
-        has_detail_image = detail_color_node.image is not None
+            # Check if base and detail textures have images
+            has_base_image = base_color_node.image is not None
+            has_detail_image = detail_color_node.image is not None
         
-        if has_base_image and has_detail_image:
-            # Create a Mix Color node for albedo images
-            mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
-            mix_node.location = (-200, 100)
-            mix_node.blend_type = 'MIX'  # Use MIX mode (default)
-            mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
-            # Link the two albedo image texture nodes into the MixRGB node
-            node_tree.links.new(base_color_node.outputs["Color"], mix_node.inputs[1])
-            node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
-            # Link the output of the Mix Color node to the Principled BSDF's Base Color input
-            node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-        elif has_base_image:
-            node_tree.links.new(base_color_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-        elif has_detail_image:
-            # Create a Mix Color node for albedo images
-            mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
-            mix_node.location = (0, 100)
-            mix_node.blend_type = 'MIX'  # Use MIX mode (default)
-            mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
-            color_input = node_tree.nodes.new(type="ShaderNodeRGB")
-            color_input.location = (-200, 100)
-            color_input.label = "Base Color Input"  # Name it for clarity
-            # Set the color value (RGBA format: (R, G, B, Alpha))
-            color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
-            node_tree.links.new(color_input.outputs["Color"], mix_node.inputs[1])  # Connect to input 1
-            node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
-            # Link the output of the Mix Color node to the Principled BSDF's Base Color input
-            node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
-        else:
-            color_input = node_tree.nodes.new(type="ShaderNodeRGB")
-            color_input.label = "Base Color Input"  # Name it for clarity
-            color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
-            node_tree.links.new(color_input.outputs["Color"], bsdf_node.inputs["Base Color"])
+            if has_base_image and has_detail_image:
+                # Create a Mix Color node for albedo images
+                mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
+                mix_node.location = (-200, 100)
+                mix_node.blend_type = 'MIX'  # Use MIX mode (default)
+                mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
+                # Link the two albedo image texture nodes into the MixRGB node
+                node_tree.links.new(base_color_node.outputs["Color"], mix_node.inputs[1])
+                node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
+                # Link the output of the Mix Color node to the Principled BSDF's Base Color input
+                node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+            elif has_base_image:
+                node_tree.links.new(base_color_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+            elif has_detail_image:
+                # Create a Mix Color node for albedo images
+                mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
+                mix_node.location = (0, 100)
+                mix_node.blend_type = 'MIX'  # Use MIX mode (default)
+                mix_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
+                color_input = node_tree.nodes.new(type="ShaderNodeRGB")
+                color_input.location = (-200, 100)
+                color_input.label = "Base Color Input"  # Name it for clarity
+                # Set the color value (RGBA format: (R, G, B, Alpha))
+                color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
+                node_tree.links.new(color_input.outputs["Color"], mix_node.inputs[1])  # Connect to input 1
+                node_tree.links.new(detail_color_node.outputs["Color"], mix_node.inputs[2])
+                # Link the output of the Mix Color node to the Principled BSDF's Base Color input
+                node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+            else:
+                color_input = node_tree.nodes.new(type="ShaderNodeRGB")
+                color_input.label = "Base Color Input"  # Name it for clarity
+                color_input.outputs[0].default_value = base_color_rgba  # Must be a tuple (R, G, B, A)
+                node_tree.links.new(color_input.outputs["Color"], bsdf_node.inputs["Base Color"])
         
-        # Check if base and detail material textures have images
-        has_base_mat_image = base_mat_color_node.image is not None
-        has_detail_mat_image = detail_mat_color_node.image is not None
+            # Check if base and detail material textures have images
+            has_base_mat_image = base_mat_color_node.image is not None
+            has_detail_mat_image = detail_mat_color_node.image is not None
         
-        if has_base_mat_image and has_detail_mat_image:
-            # Create a Mix Color node for material images
-            mix_mat_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
-            mix_mat_node.location = (-200, -150)
-            mix_mat_node.blend_type = 'MIX'  # Use MIX mode (default)
-            mix_mat_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
+            if has_base_mat_image and has_detail_mat_image:
+                # Create a Mix Color node for material images
+                mix_mat_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
+                mix_mat_node.location = (-200, -150)
+                mix_mat_node.blend_type = 'MIX'  # Use MIX mode (default)
+                mix_mat_node.inputs["Fac"].default_value = 0.5  # Adjust the factor as needed
         
-            # Link the two material image texture nodes into the MixRGB node
-            node_tree.links.new(base_mat_color_node.outputs["Color"], mix_mat_node.inputs[1])
-            node_tree.links.new(detail_mat_color_node.outputs["Color"], mix_mat_node.inputs[2])
+                # Link the two material image texture nodes into the MixRGB node
+                node_tree.links.new(base_mat_color_node.outputs["Color"], mix_mat_node.inputs[1])
+                node_tree.links.new(detail_mat_color_node.outputs["Color"], mix_mat_node.inputs[2])
             
-            # Create a Separate Color node
-            separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
-            separate_node.location = (0, -150)  # adjust the location as needed
+                # Create a Separate Color node
+                separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
+                separate_node.location = (0, -150)  # adjust the location as needed
             
-            # Link the output of the Mix Color material node to the Separate Color node input
-            node_tree.links.new(mix_mat_node.outputs["Color"], separate_node.inputs["Color"])
+                # Link the output of the Mix Color material node to the Separate Color node input
+                node_tree.links.new(mix_mat_node.outputs["Color"], separate_node.inputs["Color"])
             
-            # Connect the Green channel from the Separate Color node to the Metallic input.
-            node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
+                # Connect the Green channel from the Separate Color node to the Metallic input.
+                node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
             
-            # Connect the Red channel from the Separate Color node to the Roughness input.
-            node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
-        elif has_base_mat_image:
-            # Create a Separate Color node
-            separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
-            separate_node.location = (0, -150)  # adjust the location as needed
+                # Connect the Red channel from the Separate Color node to the Roughness input.
+                node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
+            elif has_base_mat_image:
+                # Create a Separate Color node
+                separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
+                separate_node.location = (0, -150)  # adjust the location as needed
             
-            # Link the output of the Base Color material node to the Separate Color node input
-            node_tree.links.new(base_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
+                # Link the output of the Base Color material node to the Separate Color node input
+                node_tree.links.new(base_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
             
-            # Connect the Green channel from the Separate Color node to the Metallic input.
-            node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
+                # Connect the Green channel from the Separate Color node to the Metallic input.
+                node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
             
-            # Connect the Red channel from the Separate Color node to the Roughness input.
-            node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
-        elif has_detail_mat_image:
-            # Create a Separate Color node
-            separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
-            separate_node.location = (0, -150)  # adjust the location as needed
+                # Connect the Red channel from the Separate Color node to the Roughness input.
+                node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
+            elif has_detail_mat_image:
+                # Create a Separate Color node
+                separate_node = node_tree.nodes.new("ShaderNodeSeparateColor")
+                separate_node.location = (0, -150)  # adjust the location as needed
             
-            # Link the output of the Detail Color material node to the Separate Color node input
-            node_tree.links.new(detail_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
+                # Link the output of the Detail Color material node to the Separate Color node input
+                node_tree.links.new(detail_mat_color_node.outputs["Color"], separate_node.inputs["Color"])
             
-            # Connect the Green channel from the Separate Color node to the Metallic input.
-            node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
+                # Connect the Green channel from the Separate Color node to the Metallic input.
+                node_tree.links.new(separate_node.outputs["Green"], bsdf_node.inputs["Metallic"])
             
-            # Connect the Red channel from the Separate Color node to the Roughness input.
-            node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
+                # Connect the Red channel from the Separate Color node to the Roughness input.
+                node_tree.links.new(separate_node.outputs["Red"], bsdf_node.inputs["Roughness"])
         
-        # Create a UV Map node
-        obj = context.object
-        if hasattr(obj.data, "uv_layers") and obj.data.uv_layers:
-            first_uv = obj.data.uv_layers[0].name
-        else:
-            first_uv = "UVMap"  # fallback if no UV maps exist
-        uv_map_node = node_tree.nodes.new(type="ShaderNodeUVMap")
-        uv_map_node.location = (-1200, 0)  # adjust location as needed
-        uv_map_node.uv_map = first_uv  # use the first UV map name from the object
+            # Create a UV Map node
+            obj = context.object
+            if hasattr(obj.data, "uv_layers") and obj.data.uv_layers:
+                first_uv = obj.data.uv_layers[0].name
+            else:
+                first_uv = "UVMap"  # fallback if no UV maps exist
+            uv_map_node = node_tree.nodes.new(type="ShaderNodeUVMap")
+            uv_map_node.location = (-1200, 0)  # adjust location as needed
+            uv_map_node.uv_map = first_uv  # use the first UV map name from the object
         
-        # Connect the UV Map node output to the Vector input of each image texture node
-        node_tree.links.new(uv_map_node.outputs["UV"], base_color_node.inputs["Vector"])
+            # Connect the UV Map node output to the Vector input of each image texture node
+            node_tree.links.new(uv_map_node.outputs["UV"], base_color_node.inputs["Vector"])
         
-        node_tree.links.new(uv_map_node.outputs["UV"], base_mat_color_node.inputs["Vector"])
-        node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
-        node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
+            node_tree.links.new(uv_map_node.outputs["UV"], base_mat_color_node.inputs["Vector"])
+            node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
+            node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
         
-        # --- START OF ADJUSTED CODE ---
+            # --- START OF ADJUSTED CODE ---
         
-        # Create a Mapping node
-        mapping_node = node_tree.nodes.new(type="ShaderNodeMapping")
-        mapping_node.location = (-1000, -300)  # Adjust location as needed
-        mapping_node.vector_type = 'TEXTURE' # Set to texture to expose scale
+            # Create a Mapping node
+            mapping_node = node_tree.nodes.new(type="ShaderNodeMapping")
+            mapping_node.location = (-1000, -300)  # Adjust location as needed
+            mapping_node.vector_type = 'TEXTURE' # Set to texture to expose scale
         
-        # Set the scale values
-        if detail_scale_value is not None:
-            mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
-        else:
-            mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
+            # Set the scale values
+            if detail_scale_value is not None:
+                mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
+            else:
+                mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
         
-        # Connect the UV Map node output to the Mapping node's Vector input
-        node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
+            # Connect the UV Map node output to the Mapping node's Vector input
+            node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
         
-        # Connect the output of the Mapping node to the Detail Image node's Vector input
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-        node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+            # Connect the output of the Mapping node to the Detail Image node's Vector input
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
