@@ -488,6 +488,7 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
                 node_tree.links.new(mix_node.outputs["Color"], bsdf_node.inputs["Base Color"])
             elif has_base_image:
                 node_tree.links.new(base_color_node.outputs["Color"], bsdf_node.inputs["Base Color"])
+                node_tree.links.new(base_color_node.outputs["Alpha"], bsdf_node.inputs["Alpha"])
             elif has_detail_image:
                 # Create a Mix Color node for albedo images
                 mix_node = node_tree.nodes.new(type="ShaderNodeMixRGB")
