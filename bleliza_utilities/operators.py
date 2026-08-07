@@ -291,7 +291,8 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
         
             # Set the scale values
             if detail_scale_value is not None:
-                mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
+                scale = detail_scale_value / 100.0  # Convert stored value (e.g. 20) to actual scale (e.g. 0.2)
+                mapping_node.inputs["Scale"].default_value = (scale, scale, 1.0) # X, Y, Z
             else:
                 mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
         
@@ -590,7 +591,8 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
         
             # Set the scale values
             if detail_scale_value is not None:
-                mapping_node.inputs["Scale"].default_value = (detail_scale_value, detail_scale_value, 1.0) # X, Y, Z
+                scale = detail_scale_value / 100.0  # Convert stored value (e.g. 20) to actual scale (e.g. 0.2)
+                mapping_node.inputs["Scale"].default_value = (scale, scale, 1.0) # X, Y, Z
             else:
                 mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
         
