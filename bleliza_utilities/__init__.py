@@ -31,6 +31,7 @@ classes = (
     operators.NODE_OT_assign_random_materials_selected_islands,
     operators.NODE_OT_set_materials_to_sat,
     operators.OBJECT_OT_remove_unused_materials,
+    operators.NODE_OT_bake_mapping_to_detail_uv,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
     ui.MATERIAL_PT_create_materials_panel,

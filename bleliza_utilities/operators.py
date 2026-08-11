@@ -1375,6 +1375,124 @@ class NODE_OT_set_materials_to_sat(bpy.types.Operator):
             
         return {'FINISHED'}
 
+class NODE_OT_bake_mapping_to_detail_uv(bpy.types.Operator):
+    bl_idname = "node.bake_mapping_to_detail_uv"
+    bl_label = "Bake Mapping Node to Detail UV"
+    bl_description = (
+        "For every material on the selected object: if a Mapping node exists in the shader, "
+        "its scale is baked into a new '<UVMap>_Detail' UV layer (copy of the default UV map "
+        "with the scale applied). The Mapping node is then deleted and replaced by a UV Map "
+        "shader node that points to the new Detail UV layer."
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Please select a MESH object.")
+            return {'CANCELLED'}
+
+        if not obj.data.materials:
+            self.report({'WARNING'}, f"Selected object '{obj.name}' has no materials.")
+            return {'CANCELLED'}
+
+        mesh = obj.data
+        processed_count = 0
+        skipped_count = 0
+
+        for mat in obj.data.materials:
+            if not mat or not mat.use_nodes:
+                skipped_count += 1
+                continue
+
+            node_tree = mat.node_tree
+            nodes = node_tree.nodes
+            links = node_tree.links
+
+            # ── 1. Find the first Mapping node in the shader ──────────────────
+            mapping_node = None
+            for node in nodes:
+                if node.type == 'MAPPING':
+                    mapping_node = node
+                    break
+
+            if not mapping_node:
+                continue  # Nothing to do for this material
+
+            # ── 2. Read scale from the Mapping node ───────────────────────────
+            scale = mapping_node.inputs["Scale"].default_value
+            scale_x = scale[0]
+            scale_y = scale[1]
+
+            # ── 3. Determine the source UV map ────────────────────────────────
+            source_uv_name = None
+            for lnk in mapping_node.inputs["Vector"].links:
+                if lnk.from_node.type == 'UVMAP':
+                    source_uv_name = lnk.from_node.uv_map
+                    break
+
+            # Fallback: use the first UV layer on the mesh
+            if not source_uv_name:
+                if mesh.uv_layers:
+                    source_uv_name = mesh.uv_layers[0].name
+                else:
+                    self.report({'WARNING'}, f"Material '{mat.name}': no UV layer found – skipped.")
+                    skipped_count += 1
+                    continue
+
+            source_uv_layer = mesh.uv_layers.get(source_uv_name)
+            if not source_uv_layer:
+                self.report({'WARNING'}, f"Material '{mat.name}': UV layer '{source_uv_name}' missing – skipped.")
+                skipped_count += 1
+                continue
+
+            # ── 4. Create (or reuse) the Detail UV layer ──────────────────────
+            detail_uv_name = source_uv_name + "_Detail"
+            if detail_uv_name in [uv.name for uv in mesh.uv_layers]:
+                detail_uv_layer = mesh.uv_layers[detail_uv_name]
+            else:
+                detail_uv_layer = mesh.uv_layers.new(name=detail_uv_name)
+
+            # ── 5. Copy source UVs and apply the Mapping node scale ───────────
+            # Multiplying UV coords by the scale replicates what the Mapping node
+            # does in POINT / TEXTURE space (higher scale → more tiling).
+            for i, loop_uv in enumerate(source_uv_layer.data):
+                detail_uv_layer.data[i].uv[0] = loop_uv.uv[0] * scale_x
+                detail_uv_layer.data[i].uv[1] = loop_uv.uv[1] * scale_y
+
+            # ── 6. Collect Image Texture nodes wired to Mapping's output ──────
+            image_tex_inputs = []
+            for lnk in list(mapping_node.outputs["Vector"].links):
+                if lnk.to_node.type == 'TEX_IMAGE':
+                    image_tex_inputs.append(lnk.to_node.inputs["Vector"])
+
+            # ── 7. Remember position, then delete the Mapping node ────────────
+            mapping_loc = mapping_node.location.copy()
+            nodes.remove(mapping_node)
+
+            # ── 8. Create a new UV Map node pointing to the Detail UV layer ───
+            uv_map_node = nodes.new(type="ShaderNodeUVMap")
+            uv_map_node.uv_map = detail_uv_name
+            uv_map_node.location = mapping_loc
+            uv_map_node.label = detail_uv_name
+
+            # ── 9. Wire the UV Map node into the Image Texture nodes ──────────
+            for tex_vector_input in image_tex_inputs:
+                links.new(uv_map_node.outputs["UV"], tex_vector_input)
+
+            processed_count += 1
+
+        if processed_count == 0:
+            self.report({'INFO'}, "No Mapping nodes found in any material of this object.")
+        else:
+            self.report(
+                {'INFO'},
+                f"Baked Mapping node to Detail UV in {processed_count} material(s)"
+                + (f" ({skipped_count} skipped)." if skipped_count else "."),
+            )
+        return {'FINISHED'}
+
+
 class OBJECT_OT_remove_unused_materials(bpy.types.Operator):
     bl_idname = "object.remove_unused_materials"
     bl_label = "Remove Unused Materials"
