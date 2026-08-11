@@ -1454,11 +1454,15 @@ class NODE_OT_bake_mapping_to_detail_uv(bpy.types.Operator):
                 detail_uv_layer = mesh.uv_layers.new(name=detail_uv_name)
 
             # ── 5. Copy source UVs and apply the Mapping node scale ───────────
-            # Multiplying UV coords by the scale replicates what the Mapping node
-            # does in POINT / TEXTURE space (higher scale → more tiling).
+            # The Mapping node scale works as a texture-space scale: a value of 0.1
+            # means the texture is compressed to 1/10th, producing 10× more tiling.
+            # To bake this into UV space we must multiply UV coords by 1/scale
+            # (the inverse), so that scale=0.1 → UV coords ×10 (10× tiling).
+            inv_scale_x = (1.0 / scale_x) if scale_x != 0.0 else 1.0
+            inv_scale_y = (1.0 / scale_y) if scale_y != 0.0 else 1.0
             for i, loop_uv in enumerate(source_uv_layer.data):
-                detail_uv_layer.data[i].uv[0] = loop_uv.uv[0] * scale_x
-                detail_uv_layer.data[i].uv[1] = loop_uv.uv[1] * scale_y
+                detail_uv_layer.data[i].uv[0] = loop_uv.uv[0] * inv_scale_x
+                detail_uv_layer.data[i].uv[1] = loop_uv.uv[1] * inv_scale_y
 
             # ── 6. Collect Image Texture nodes wired to Mapping's output ──────
             image_tex_inputs = []
