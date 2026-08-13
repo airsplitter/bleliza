@@ -5,6 +5,55 @@ import bmesh
 import random
 from mathutils import Vector
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module-level helper: bake a Mapping-node scale into a Detail UV layer
+# on EVERY mesh object in the scene that uses the given material.
+#
+# Parameters
+#   mat             – bpy.types.Material to process
+#   source_uv_name  – name of the base UV layer to copy from
+#   scale_x, scale_y – Mapping node TEXTURE-space scale values
+#                     (scale 0.1 → 10× tiling → UV coords ×10)
+# Returns
+#   detail_uv_name  – the name of the created/updated Detail UV layer
+# ─────────────────────────────────────────────────────────────────────────────
+def _create_detail_uv_for_material(mat, source_uv_name, scale_x, scale_y):
+    """Create (or update) a '<source_uv>_Detail' UV layer on every mesh object
+    that uses *mat*, with UVs copied from *source_uv_name* and scaled by the
+    inverse of the given Mapping-node scale values."""
+
+    detail_uv_name = source_uv_name + "_Detail"
+
+    # Invert: Mapping scale 0.1 → UV factor 10 (more tiling)
+    inv_x = (1.0 / scale_x) if scale_x != 0.0 else 1.0
+    inv_y = (1.0 / scale_y) if scale_y != 0.0 else 1.0
+
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH':
+            continue
+        # Check whether this object uses the material
+        if not any(slot.material == mat for slot in obj.material_slots):
+            continue
+
+        mesh = obj.data
+        source_layer = mesh.uv_layers.get(source_uv_name)
+        if not source_layer:
+            continue  # object has no matching UV layer – skip silently
+
+        # Create detail layer if missing; otherwise reuse the existing one
+        if detail_uv_name not in mesh.uv_layers:
+            detail_layer = mesh.uv_layers.new(name=detail_uv_name)
+        else:
+            detail_layer = mesh.uv_layers[detail_uv_name]
+
+        for i, loop_uv in enumerate(source_layer.data):
+            detail_layer.data[i].uv[0] = loop_uv.uv[0] * inv_x
+            detail_layer.data[i].uv[1] = loop_uv.uv[1] * inv_y
+
+    return detail_uv_name
+
+
 # Operator to add image texture nodes and create a node preset layout,
 # filling them with images from existing nodes if available.
 class NODE_OT_create_preset_2020(bpy.types.Operator):
@@ -282,26 +331,27 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
             node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
             node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
         
-            # --- START OF ADJUSTED CODE ---
-        
-            # Create a Mapping node
-            mapping_node = node_tree.nodes.new(type="ShaderNodeMapping")
-            mapping_node.location = (-1000, -300)  # Adjust location as needed
-            mapping_node.vector_type = 'TEXTURE' # Set to texture to expose scale
-        
-            # Set the scale values
+            # --- Bake Detail UV scale into a dedicated UV layer ---
+            # Convert stored detail_scale_value (e.g. 20) → Mapping-node scale (0.2).
+            # A Mapping scale of 0.2 means 1/0.2 = 5× tiling in UV space.
             if detail_scale_value is not None:
-                scale = detail_scale_value / 100.0  # Convert stored value (e.g. 20) to actual scale (e.g. 0.2)
-                mapping_node.inputs["Scale"].default_value = (scale, scale, 1.0) # X, Y, Z
+                mapping_scale = detail_scale_value / 100.0
             else:
-                mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
-        
-            # Connect the UV Map node output to the Mapping node's Vector input
-            node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
-        
-            # Connect the output of the Mapping node to the Detail Image node's Vector input
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+                mapping_scale = 1.0
+
+            detail_uv_name = _create_detail_uv_for_material(
+                mat, first_uv, mapping_scale, mapping_scale
+            )
+
+            # Create a UV Map shader node pointing at the new Detail UV layer
+            detail_uv_node = node_tree.nodes.new(type="ShaderNodeUVMap")
+            detail_uv_node.location = (-1000, -300)
+            detail_uv_node.uv_map = detail_uv_name
+            detail_uv_node.label = detail_uv_name
+
+            # Wire Detail UV node into the detail image texture nodes
+            node_tree.links.new(detail_uv_node.outputs["UV"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(detail_uv_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
@@ -582,26 +632,25 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
             node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
             node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
         
-            # --- START OF ADJUSTED CODE ---
-        
-            # Create a Mapping node
-            mapping_node = node_tree.nodes.new(type="ShaderNodeMapping")
-            mapping_node.location = (-1000, -300)  # Adjust location as needed
-            mapping_node.vector_type = 'TEXTURE' # Set to texture to expose scale
-        
-            # Set the scale values
+            # --- Bake Detail UV scale into a dedicated UV layer ---
             if detail_scale_value is not None:
-                scale = detail_scale_value / 100.0  # Convert stored value (e.g. 20) to actual scale (e.g. 0.2)
-                mapping_node.inputs["Scale"].default_value = (scale, scale, 1.0) # X, Y, Z
+                mapping_scale = detail_scale_value / 100.0
             else:
-                mapping_node.inputs["Scale"].default_value = (1.0, 1.0, 1.0) # Fallback value
-        
-            # Connect the UV Map node output to the Mapping node's Vector input
-            node_tree.links.new(uv_map_node.outputs["UV"], mapping_node.inputs["Vector"])
-        
-            # Connect the output of the Mapping node to the Detail Image node's Vector input
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_color_node.inputs["Vector"])
-            node_tree.links.new(mapping_node.outputs["Vector"], detail_mat_color_node.inputs["Vector"])
+                mapping_scale = 1.0
+
+            detail_uv_name = _create_detail_uv_for_material(
+                mat, first_uv, mapping_scale, mapping_scale
+            )
+
+            # Create a UV Map shader node pointing at the new Detail UV layer
+            detail_uv_node = node_tree.nodes.new(type="ShaderNodeUVMap")
+            detail_uv_node.location = (-1000, -300)
+            detail_uv_node.uv_map = detail_uv_name
+            detail_uv_node.label = detail_uv_name
+
+            # Wire Detail UV node into the detail image texture nodes
+            node_tree.links.new(detail_uv_node.outputs["UV"], detail_color_node.inputs["Vector"])
+            node_tree.links.new(detail_uv_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
         
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
@@ -1440,31 +1489,13 @@ class NODE_OT_bake_mapping_to_detail_uv(bpy.types.Operator):
                     skipped_count += 1
                     continue
 
-            source_uv_layer = mesh.uv_layers.get(source_uv_name)
-            if not source_uv_layer:
-                self.report({'WARNING'}, f"Material '{mat.name}': UV layer '{source_uv_name}' missing – skipped.")
-                skipped_count += 1
-                continue
+            # ── 4. Bake Detail UV on ALL scene objects that use this material ──
+            # _create_detail_uv_for_material handles scale inversion internally.
+            detail_uv_name = _create_detail_uv_for_material(
+                mat, source_uv_name, scale_x, scale_y
+            )
 
-            # ── 4. Create (or reuse) the Detail UV layer ──────────────────────
-            detail_uv_name = source_uv_name + "_Detail"
-            if detail_uv_name in [uv.name for uv in mesh.uv_layers]:
-                detail_uv_layer = mesh.uv_layers[detail_uv_name]
-            else:
-                detail_uv_layer = mesh.uv_layers.new(name=detail_uv_name)
-
-            # ── 5. Copy source UVs and apply the Mapping node scale ───────────
-            # The Mapping node scale works as a texture-space scale: a value of 0.1
-            # means the texture is compressed to 1/10th, producing 10× more tiling.
-            # To bake this into UV space we must multiply UV coords by 1/scale
-            # (the inverse), so that scale=0.1 → UV coords ×10 (10× tiling).
-            inv_scale_x = (1.0 / scale_x) if scale_x != 0.0 else 1.0
-            inv_scale_y = (1.0 / scale_y) if scale_y != 0.0 else 1.0
-            for i, loop_uv in enumerate(source_uv_layer.data):
-                detail_uv_layer.data[i].uv[0] = loop_uv.uv[0] * inv_scale_x
-                detail_uv_layer.data[i].uv[1] = loop_uv.uv[1] * inv_scale_y
-
-            # ── 6. Collect Image Texture nodes wired to Mapping's output ──────
+            # ── 5. Collect Image Texture nodes wired to Mapping's output ──────
             image_tex_inputs = []
             for lnk in list(mapping_node.outputs["Vector"].links):
                 if lnk.to_node.type == 'TEX_IMAGE':
