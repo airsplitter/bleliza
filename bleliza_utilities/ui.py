@@ -102,6 +102,9 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         op_sel.threshold = scene.bleliza_flat_threshold
         
         layout.separator()
+        layout.label(text="Custom Properties (Scene-wide):")
+        layout.operator("object.remove_non_aliza_custom_props", text="Remove Non-ALIZA Custom Properties (All Objects)")
+        layout.separator()
         layout.label(text="Custom Properties:")
         
         # 1. Add shadow=0 to all

@@ -1528,6 +1528,38 @@ class NODE_OT_bake_mapping_to_detail_uv(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class OBJECT_OT_remove_non_aliza_custom_props(bpy.types.Operator):
+    bl_idname = "object.remove_non_aliza_custom_props"
+    bl_label = "Remove Non-ALIZA Custom Properties"
+    bl_description = (
+        "Removes all custom properties from every object in the scene "
+        "whose property name does NOT contain 'aliza' (case-insensitive)"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        removed_count = 0
+        objects_affected = 0
+
+        for obj in bpy.data.objects:
+            keys_to_remove = [
+                key for key in obj.keys()
+                if "aliza" not in key.lower()
+            ]
+            if keys_to_remove:
+                objects_affected += 1
+                for key in keys_to_remove:
+                    del obj[key]
+                    removed_count += 1
+
+        self.report(
+            {'INFO'},
+            f"Removed {removed_count} non-ALIZA custom propert{'y' if removed_count == 1 else 'ies'} "
+            f"from {objects_affected} object{'s' if objects_affected != 1 else ''}.",
+        )
+        return {'FINISHED'}
+
+
 class OBJECT_OT_remove_unused_materials(bpy.types.Operator):
     bl_idname = "object.remove_unused_materials"
     bl_label = "Remove Unused Materials"
