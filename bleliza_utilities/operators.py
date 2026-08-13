@@ -1530,7 +1530,7 @@ class NODE_OT_bake_mapping_to_detail_uv(bpy.types.Operator):
 
 class OBJECT_OT_remove_non_aliza_custom_props(bpy.types.Operator):
     bl_idname = "object.remove_non_aliza_custom_props"
-    bl_label = "Remove Non-ALIZA Custom Properties"
+    bl_label = "Remove Non-ALIZA Custom Properties (Objects)"
     bl_description = (
         "Removes all custom properties from every object in the scene "
         "whose property name does NOT contain 'aliza' (case-insensitive)"
@@ -1556,6 +1556,44 @@ class OBJECT_OT_remove_non_aliza_custom_props(bpy.types.Operator):
             {'INFO'},
             f"Removed {removed_count} non-ALIZA custom propert{'y' if removed_count == 1 else 'ies'} "
             f"from {objects_affected} object{'s' if objects_affected != 1 else ''}.",
+        )
+        return {'FINISHED'}
+
+
+class OBJECT_OT_remove_non_aliza_material_custom_props(bpy.types.Operator):
+    bl_idname = "object.remove_non_aliza_material_custom_props"
+    bl_label = "Remove Non-ALIZA Custom Properties (Materials)"
+    bl_description = (
+        "Removes all custom properties from every material used by any object in the scene "
+        "whose property name does NOT contain 'aliza' (case-insensitive)"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        removed_count = 0
+        materials_affected = 0
+
+        visited = set()
+        for obj in bpy.data.objects:
+            for slot in obj.material_slots:
+                mat = slot.material
+                if mat is None or mat.name in visited:
+                    continue
+                visited.add(mat.name)
+                keys_to_remove = [
+                    key for key in mat.keys()
+                    if "aliza" not in key.lower()
+                ]
+                if keys_to_remove:
+                    materials_affected += 1
+                    for key in keys_to_remove:
+                        del mat[key]
+                        removed_count += 1
+
+        self.report(
+            {'INFO'},
+            f"Removed {removed_count} non-ALIZA custom propert{'y' if removed_count == 1 else 'ies'} "
+            f"from {materials_affected} material{'s' if materials_affected != 1 else ''}.",
         )
         return {'FINISHED'}
 

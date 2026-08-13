@@ -13,6 +13,11 @@ class BLELIZA_MATERIAL_PT_parent(bpy.types.Panel):
         layout.label(text="Material Tools:")
         layout.operator("object.remove_unused_materials", text="Remove Unused Materials from Object")
 
+        layout.separator()
+        layout.label(text="Custom Properties (Scene-wide):")
+        layout.operator("object.remove_non_aliza_custom_props", text="Remove Non-ALIZA Custom Props from All Objects")
+        layout.operator("object.remove_non_aliza_material_custom_props", text="Remove Non-ALIZA Custom Props from All Materials")
+
 # Panel nested inside our custom parent panel
 class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
     bl_label = "Texture Preset"
@@ -103,7 +108,7 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         
         layout.separator()
         layout.label(text="Custom Properties (Scene-wide):")
-        layout.operator("object.remove_non_aliza_custom_props", text="Remove Non-ALIZA Custom Properties (All Objects)")
+        layout.operator("object.remove_non_aliza_custom_props", text="Remove Non-ALIZA Custom Props from All Objects")
         layout.separator()
         layout.label(text="Custom Properties:")
         

@@ -33,6 +33,7 @@ classes = (
     operators.OBJECT_OT_remove_unused_materials,
     operators.NODE_OT_bake_mapping_to_detail_uv,
     operators.OBJECT_OT_remove_non_aliza_custom_props,
+    operators.OBJECT_OT_remove_non_aliza_material_custom_props,
     ui.BLELIZA_MATERIAL_PT_parent,
     ui.MATERIAL_PT_texture_preset_panel,
     ui.MATERIAL_PT_create_materials_panel,
