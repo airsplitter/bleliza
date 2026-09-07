@@ -146,3 +146,7 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         op.prop_value = 0
         op.target = 'SELECTED'
         op.overwrite = True
+
+        layout.separator()
+        layout.label(text="Geometry Nodes Trees:")
+        layout.operator("object.make_real_trees", text="Make real trees")

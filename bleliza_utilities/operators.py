@@ -1598,6 +1598,65 @@ class OBJECT_OT_remove_non_aliza_material_custom_props(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class OBJECT_OT_make_real_trees(bpy.types.Operator):
+    bl_idname = "object.make_real_trees"
+    bl_label = "Make real trees"
+    bl_description = (
+        "Reads the 'aliza_tree_instance' attribute from the evaluated Geometry Nodes mesh "
+        "and generates an Empty object for each point, storing the attribute as a custom property"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        import bpy
+
+        # Get active object with the Geometry Nodes modifier
+        gn_obj = context.active_object
+        ATTRIBUTE_NAME = "aliza_tree_instance"
+
+        if gn_obj and gn_obj.type == 'MESH':
+            # 1. Duplicate object and apply GN modifier to evaluate points/attributes
+            depsgraph = context.evaluated_depsgraph_get()
+            evaluated_obj = gn_obj.evaluated_get(depsgraph)
+            eval_mesh = evaluated_obj.data
+
+            # Check if the attribute exists
+            if ATTRIBUTE_NAME in eval_mesh.attributes:
+                attr = eval_mesh.attributes[ATTRIBUTE_NAME]
+
+                # Create a new collection for exported empties
+                export_coll = bpy.data.collections.new("Exported_Empties")
+                context.scene.collection.children.link(export_coll)
+
+                # Loop through each point/vertex in the evaluated mesh
+                for i, vertex in enumerate(eval_mesh.vertices):
+                    # Read position and custom attribute
+                    pos = evaluated_obj.matrix_world @ vertex.co
+                    attr_value = attr.data[i].value  # Adjust depending on data type (.value, .color, etc.)
+
+                    # Create an Empty object
+                    empty = bpy.data.objects.new(f"Empty_{i}", None)
+                    empty.location = pos
+                    empty.empty_display_type = 'PLAIN_AXES'
+
+                    # Copy custom property to the Object level
+                    empty[ATTRIBUTE_NAME] = attr_value
+
+                    # Link to scene
+                    export_coll.objects.link(empty)
+
+                count = len(eval_mesh.vertices)
+                self.report({'INFO'}, f"Successfully generated {count} empties with custom properties.")
+            else:
+                self.report({'WARNING'}, f"Attribute '{ATTRIBUTE_NAME}' not found on evaluated mesh.")
+                return {'CANCELLED'}
+        else:
+            self.report({'ERROR'}, "Active object must be a MESH with a Geometry Nodes modifier.")
+            return {'CANCELLED'}
+
+        return {'FINISHED'}
+
+
 class OBJECT_OT_remove_unused_materials(bpy.types.Operator):
     bl_idname = "object.remove_unused_materials"
     bl_label = "Remove Unused Materials"
