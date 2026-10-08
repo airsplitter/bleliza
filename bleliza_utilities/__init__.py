@@ -30,6 +30,7 @@ classes = (
     operators.NODE_OT_assign_random_materials_islands,
     operators.NODE_OT_assign_random_materials_selected_islands,
     operators.NODE_OT_set_materials_to_sat,
+    operators.OBJECT_OT_merge_duplicate_materials,
     operators.OBJECT_OT_remove_unused_materials,
     operators.NODE_OT_bake_mapping_to_detail_uv,
     operators.OBJECT_OT_remove_non_aliza_custom_props,

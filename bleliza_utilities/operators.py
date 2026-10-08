@@ -1657,6 +1657,167 @@ class OBJECT_OT_make_real_trees(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
+    bl_idname = "object.merge_duplicate_materials"
+    bl_label = "Merge Duplicate Materials"
+    bl_description = (
+        "Scans all objects in the scene for materials that use the same image textures, "
+        "asks for confirmation, then merges duplicates into one material named after the albedo texture"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _material_image_signature(mat):
+        """Return a frozenset of image identifiers (filepath or name) used in
+        all TEX_IMAGE nodes of *mat*, or None if the material has no images."""
+        if not mat or not mat.use_nodes:
+            return None
+        paths = set()
+        for node in mat.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                identifier = node.image.filepath.strip() or node.image.name
+                paths.add(identifier)
+        return frozenset(paths) if paths else None
+
+    @staticmethod
+    def _find_albedo_image(mat):
+        """Return the image most likely to be the albedo / base-color texture.
+
+        Strategy (in order of priority):
+        1. TEX_IMAGE directly wired into the Principled BSDF 'Base Color' input.
+        2. TEX_IMAGE wired into a Mix node that feeds 'Base Color'.
+        3. First TEX_IMAGE with colorspace == 'sRGB'.
+        4. Any TEX_IMAGE with an assigned image.
+        """
+        if not mat or not mat.use_nodes:
+            return None
+
+        for node in mat.node_tree.nodes:
+            if node.type != 'BSDF_PRINCIPLED':
+                continue
+            bc_input = node.inputs.get("Base Color")
+            if bc_input and bc_input.is_linked:
+                from_node = bc_input.links[0].from_node
+                if from_node.type == 'TEX_IMAGE' and from_node.image:
+                    return from_node.image
+                # One level deeper (MixRGB / ShaderNodeMix)
+                if from_node.type in {'MIX_RGB', 'MIX'}:
+                    for idx in (1, 2):
+                        inp = from_node.inputs[idx]
+                        if inp.is_linked:
+                            candidate = inp.links[0].from_node
+                            if candidate.type == 'TEX_IMAGE' and candidate.image:
+                                return candidate.image
+
+        # Fallback 1: sRGB image texture
+        for node in mat.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                try:
+                    if node.image.colorspace_settings.name == 'sRGB':
+                        return node.image
+                except Exception:
+                    pass
+
+        # Fallback 2: any image texture
+        for node in mat.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                return node.image
+
+        return None
+
+    def _find_duplicate_groups(self):
+        """Collect all materials used in the scene and group duplicates.
+
+        Returns a list of lists – each inner list contains two or more
+        bpy.types.Material objects that share the same image texture set.
+        """
+        all_mats = set()
+        for obj in bpy.data.objects:
+            for slot in obj.material_slots:
+                if slot.material:
+                    all_mats.add(slot.material)
+
+        sig_map = {}
+        for mat in all_mats:
+            sig = self._material_image_signature(mat)
+            if sig is None:
+                continue
+            sig_map.setdefault(sig, []).append(mat)
+
+        return [group for group in sig_map.values() if len(group) > 1]
+
+    # ── Blender operator interface ────────────────────────────────────────────
+
+    def invoke(self, context, event):
+        groups = self._find_duplicate_groups()
+        if not groups:
+            self.report({'INFO'}, "No duplicate materials found in the scene.")
+            return {'CANCELLED'}
+
+        total_redundant = sum(len(g) - 1 for g in groups)
+        # Print a preview to the console so users can inspect before confirming
+        print("=" * 60)
+        print(f"[Merge Duplicates] Found {len(groups)} duplicate group(s), "
+              f"{total_redundant} redundant material(s) will be removed:")
+        for i, group in enumerate(groups, 1):
+            albedo = self._find_albedo_image(group[0])
+            albedo_name = (
+                os.path.splitext(os.path.basename(
+                    albedo.filepath.strip() or albedo.name))[0]
+                if albedo else "<no albedo>"
+            )
+            print(f"  Group {i}: new name → '{albedo_name}'")
+            for mat in group:
+                print(f"    • {mat.name}")
+        print("=" * 60)
+
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        groups = self._find_duplicate_groups()
+        if not groups:
+            self.report({'INFO'}, "No duplicate materials found.")
+            return {'CANCELLED'}
+
+        merged_slots = 0
+        removed_mats = 0
+
+        for group in groups:
+            winner = group[0]
+            losers = group[1:]
+
+            # Rename winner after its albedo texture filename
+            albedo = self._find_albedo_image(winner)
+            if albedo:
+                raw_path = albedo.filepath.strip() or albedo.name
+                new_name = os.path.splitext(os.path.basename(raw_path))[0]
+                if new_name:
+                    winner.name = new_name
+
+            # Re-point every material slot that uses a loser to the winner
+            loser_set = set(losers)
+            for obj in bpy.data.objects:
+                for slot in obj.material_slots:
+                    if slot.material in loser_set:
+                        slot.material = winner
+                        merged_slots += 1
+
+            # Purge zero-user loser materials
+            for loser in losers:
+                if loser.users == 0:
+                    bpy.data.materials.remove(loser)
+                    removed_mats += 1
+
+        self.report(
+            {'INFO'},
+            f"Merged {merged_slots} material slot(s) across {len(groups)} group(s); "
+            f"removed {removed_mats} duplicate material(s)."
+        )
+        return {'FINISHED'}
+
+
 class OBJECT_OT_remove_unused_materials(bpy.types.Operator):
     bl_idname = "object.remove_unused_materials"
     bl_label = "Remove Unused Materials"

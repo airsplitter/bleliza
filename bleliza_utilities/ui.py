@@ -12,6 +12,7 @@ class BLELIZA_MATERIAL_PT_parent(bpy.types.Panel):
         layout = self.layout
         layout.label(text="Material Tools:")
         layout.operator("object.remove_unused_materials", text="Remove Unused Materials from Object")
+        layout.operator("object.merge_duplicate_materials", text="Merge Duplicate Materials (Scene-wide)")
 
         layout.separator()
         layout.label(text="Custom Properties (Scene-wide):")
