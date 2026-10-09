@@ -1785,45 +1785,77 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
 
         return active
 
+    @staticmethod
+    def _build_col_join_map():
+        """Return a dict: material → { collection → [mesh objects] }
+        for every material that is used by 2+ mesh objects in the same collection.
+        Only entries with at least one collection containing 2+ objects are kept.
+        """
+        mat_col_map = {}  # mat → { col → [obj, ...] }
+        for obj in bpy.data.objects:
+            if obj.type != 'MESH':
+                continue
+            seen_mats = set()
+            for slot in obj.material_slots:
+                mat = slot.material
+                if mat is None or mat in seen_mats:
+                    continue
+                seen_mats.add(mat)
+                for col in (c for c in bpy.data.collections if obj.name in c.objects):
+                    mat_col_map.setdefault(mat, {}).setdefault(col, []).append(obj)
+
+        # Keep only (mat, col) combos where 2+ objects share the material
+        result = {}
+        for mat, col_dict in mat_col_map.items():
+            filtered = {col: objs for col, objs in col_dict.items() if len(objs) >= 2}
+            if filtered:
+                result[mat] = filtered
+        return result
+
     # ── Blender operator interface ────────────────────────────────────────────
 
     def invoke(self, context, event):
-        groups = self._find_duplicate_groups()
-        if not groups:
-            self.report({'INFO'}, "No duplicate materials found in the scene.")
+        dup_groups = self._find_duplicate_groups()
+        join_map = self._build_col_join_map()
+
+        if not dup_groups and not join_map:
+            self.report({'INFO'}, "No duplicate materials and no same-collection objects to join found.")
             return {'CANCELLED'}
 
-        total_redundant = sum(len(g) - 1 for g in groups)
-        # Print a preview to the console so users can inspect before confirming
         print("=" * 60)
-        print(f"[Merge Duplicates] Found {len(groups)} duplicate group(s), "
-              f"{total_redundant} redundant material(s) will be removed:")
-        for i, group in enumerate(groups, 1):
-            albedo = self._find_albedo_image(group[0])
-            albedo_name = (
-                os.path.splitext(os.path.basename(
-                    albedo.filepath.strip() or albedo.name))[0]
-                if albedo else "<no albedo>"
-            )
-            print(f"  Group {i}: new name → '{albedo_name}'")
-            for mat in group:
-                print(f"    • {mat.name}")
+        if dup_groups:
+            total_redundant = sum(len(g) - 1 for g in dup_groups)
+            print(f"[Merge Duplicates] Found {len(dup_groups)} duplicate group(s), "
+                  f"{total_redundant} redundant material(s) will be removed:")
+            for i, group in enumerate(dup_groups, 1):
+                albedo = self._find_albedo_image(group[0])
+                albedo_name = (
+                    os.path.splitext(os.path.basename(
+                        albedo.filepath.strip() or albedo.name))[0]
+                    if albedo else "<no albedo>"
+                )
+                print(f"  Group {i}: new name → '{albedo_name}'")
+                for mat in group:
+                    print(f"    • {mat.name}")
+
+        if join_map:
+            print(f"[Merge Duplicates] Objects to join per material/collection:")
+            for mat, col_dict in join_map.items():
+                for col, objs in col_dict.items():
+                    print(f"  Mat '{mat.name}' in col '{col.name}': "
+                          + ", ".join(o.name for o in objs))
         print("=" * 60)
 
         return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
-        groups = self._find_duplicate_groups()
-        if not groups:
-            self.report({'INFO'}, "No duplicate materials found.")
-            return {'CANCELLED'}
+        dup_groups = self._find_duplicate_groups()
 
         merged_slots = 0
         removed_mats = 0
-        # Track which winner materials were actually involved so we can join later
-        winner_materials = []
 
-        for group in groups:
+        # ── Step 1: merge duplicate materials ────────────────────────────────
+        for group in dup_groups:
             winner = group[0]
             losers = group[1:]
 
@@ -1849,43 +1881,39 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
                     bpy.data.materials.remove(loser)
                     removed_mats += 1
 
-            winner_materials.append(winner)
-
-        # ── Join objects that share a winner material and are in the same collection ──
-        # Build: winner_mat → { collection → [mesh objects] }
+        # ── Step 2: join same-collection objects that share ANY material ─────
+        # Re-build the join map after the merge so newly unified materials are
+        # also picked up.
+        join_map = self._build_col_join_map()
         joins_done = 0
-        for winner in winner_materials:
-            col_map = {}  # collection → list of mesh objects using winner
-            for obj in list(bpy.data.objects):
-                if obj.type != 'MESH':
-                    continue
-                uses_winner = any(
-                    slot.material == winner for slot in obj.material_slots
-                )
-                if not uses_winner:
-                    continue
-                for col in self._collections_of_object(obj):
-                    col_map.setdefault(col, []).append(obj)
 
-            for col, objs in col_map.items():
+        for mat, col_dict in join_map.items():
+            for col, objs in col_dict.items():
                 if len(objs) < 2:
-                    continue  # Nothing to join in this collection
-
+                    continue
                 print(
                     f"[Merge Duplicates] Joining {len(objs)} object(s) in "
-                    f"collection '{col.name}' sharing material '{winner.name}':"
+                    f"collection '{col.name}' sharing material '{mat.name}':"
                 )
                 for o in objs:
                     print(f"    • {o.name}")
 
-                survivor = self._join_object_group(context, objs)
+                # Filter to objects still present (some may have been joined already)
+                live_objs = [o for o in objs if o.name in bpy.data.objects]
+                if len(live_objs) < 2:
+                    continue
+
+                survivor = self._join_object_group(context, live_objs)
                 if survivor:
-                    # Rename joined object after the material
-                    survivor.name = winner.name
+                    survivor.name = mat.name
                     joins_done += 1
 
+        if not dup_groups and joins_done == 0:
+            self.report({'INFO'}, "No duplicate materials and no objects were joined.")
+            return {'CANCELLED'}
+
         msg = (
-            f"Merged {merged_slots} material slot(s) across {len(groups)} group(s); "
+            f"Merged {merged_slots} material slot(s) across {len(dup_groups)} group(s); "
             f"removed {removed_mats} duplicate material(s); "
             f"performed {joins_done} join operation(s)."
         )
