@@ -1755,27 +1755,38 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
 
     @staticmethod
     def _join_object_group(context, objects):
-        """Join a list of MESH objects into the first one using an override context.
+        """Join a list of MESH objects into the first one.
 
-        Returns the surviving object (first in list) or None on failure.
+        Only objects that are present in the active ViewLayer are processed.
+        Returns the surviving object or None on failure / if fewer than 2
+        objects are visible in the view layer.
         """
-        if len(objects) < 2:
-            return objects[0] if objects else None
+        if not objects:
+            return None
 
-        # Ensure Object mode on the view layer
+        vl_objects = context.view_layer.objects
+
+        # Filter to objects actually present in the view layer
+        vl_objs = [o for o in objects if o.name in vl_objects]
+        if len(vl_objs) < 2:
+            skipped = [o.name for o in objects if o.name not in vl_objects]
+            if skipped:
+                print(f"[Merge Duplicates] Skipping join – object(s) not in ViewLayer: {skipped}")
+            return None
+
+        # Ensure Object mode
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
         # Deselect everything, then select only our group
-        for o in context.view_layer.objects:
+        for o in vl_objects:
             o.select_set(False)
 
-        active = objects[0]
-        for o in objects:
-            if o.name in context.view_layer.objects:
-                o.select_set(True)
+        active = vl_objs[0]
+        for o in vl_objs:
+            o.select_set(True)
 
-        context.view_layer.objects.active = active
+        vl_objects.active = active
 
         try:
             bpy.ops.object.join()
