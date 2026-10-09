@@ -1748,6 +1748,43 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
 
         return [group for group in sig_map.values() if len(group) > 1]
 
+    @staticmethod
+    def _collections_of_object(obj):
+        """Return the set of bpy.types.Collection objects that directly contain *obj*."""
+        return {col for col in bpy.data.collections if obj.name in col.objects}
+
+    @staticmethod
+    def _join_object_group(context, objects):
+        """Join a list of MESH objects into the first one using an override context.
+
+        Returns the surviving object (first in list) or None on failure.
+        """
+        if len(objects) < 2:
+            return objects[0] if objects else None
+
+        # Ensure Object mode on the view layer
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Deselect everything, then select only our group
+        for o in context.view_layer.objects:
+            o.select_set(False)
+
+        active = objects[0]
+        for o in objects:
+            if o.name in context.view_layer.objects:
+                o.select_set(True)
+
+        context.view_layer.objects.active = active
+
+        try:
+            bpy.ops.object.join()
+        except Exception as exc:
+            print(f"[Merge Duplicates] join failed: {exc}")
+            return None
+
+        return active
+
     # ── Blender operator interface ────────────────────────────────────────────
 
     def invoke(self, context, event):
@@ -1783,6 +1820,8 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
 
         merged_slots = 0
         removed_mats = 0
+        # Track which winner materials were actually involved so we can join later
+        winner_materials = []
 
         for group in groups:
             winner = group[0]
@@ -1810,11 +1849,48 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
                     bpy.data.materials.remove(loser)
                     removed_mats += 1
 
-        self.report(
-            {'INFO'},
+            winner_materials.append(winner)
+
+        # ── Join objects that share a winner material and are in the same collection ──
+        # Build: winner_mat → { collection → [mesh objects] }
+        joins_done = 0
+        for winner in winner_materials:
+            col_map = {}  # collection → list of mesh objects using winner
+            for obj in list(bpy.data.objects):
+                if obj.type != 'MESH':
+                    continue
+                uses_winner = any(
+                    slot.material == winner for slot in obj.material_slots
+                )
+                if not uses_winner:
+                    continue
+                for col in self._collections_of_object(obj):
+                    col_map.setdefault(col, []).append(obj)
+
+            for col, objs in col_map.items():
+                if len(objs) < 2:
+                    continue  # Nothing to join in this collection
+
+                print(
+                    f"[Merge Duplicates] Joining {len(objs)} object(s) in "
+                    f"collection '{col.name}' sharing material '{winner.name}':"
+                )
+                for o in objs:
+                    print(f"    • {o.name}")
+
+                survivor = self._join_object_group(context, objs)
+                if survivor:
+                    # Rename joined object after the material
+                    survivor.name = winner.name
+                    joins_done += 1
+
+        msg = (
             f"Merged {merged_slots} material slot(s) across {len(groups)} group(s); "
-            f"removed {removed_mats} duplicate material(s)."
+            f"removed {removed_mats} duplicate material(s); "
+            f"performed {joins_done} join operation(s)."
         )
+        self.report({'INFO'}, msg)
+        print(f"[Merge Duplicates] {msg}")
         return {'FINISHED'}
 
 
