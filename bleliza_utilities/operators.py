@@ -1754,6 +1754,11 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
         return {col for col in bpy.data.collections if obj.name in col.objects}
 
     @staticmethod
+    def _obj_in_view_layer(obj, context):
+        """Return True if *obj* is linked into the active ViewLayer."""
+        return context.view_layer.objects.get(obj.name) is not None
+
+    @staticmethod
     def _join_object_group(context, objects):
         """Join a list of MESH objects into the first one.
 
@@ -1766,12 +1771,15 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
 
         vl_objects = context.view_layer.objects
 
-        # Filter to objects actually present in the view layer
-        vl_objs = [o for o in objects if o.name in vl_objects]
+        # Filter to objects actually present in the view layer using .get()
+        vl_objs = [o for o in objects
+                   if vl_objects.get(o.name) is not None]
+
+        skipped = [o.name for o in objects if vl_objects.get(o.name) is None]
+        if skipped:
+            print(f"[Merge Duplicates] Skipping – not in ViewLayer: {skipped}")
+
         if len(vl_objs) < 2:
-            skipped = [o.name for o in objects if o.name not in vl_objects]
-            if skipped:
-                print(f"[Merge Duplicates] Skipping join – object(s) not in ViewLayer: {skipped}")
             return None
 
         # Ensure Object mode
@@ -1786,9 +1794,8 @@ class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
         for o in vl_objs:
             o.select_set(True)
 
-        vl_objects.active = active
-
         try:
+            vl_objects.active = active
             bpy.ops.object.join()
         except Exception as exc:
             print(f"[Merge Duplicates] join failed: {exc}")
