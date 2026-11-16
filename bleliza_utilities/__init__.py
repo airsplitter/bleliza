@@ -18,6 +18,7 @@ importlib.reload(operators)
 importlib.reload(ui)
 
 classes = (
+    operators.OBJECT_OT_bleliza_cleanup_meshes,
     operators.NODE_OT_create_preset_2020,
     operators.NODE_OT_create_preset_2024,
     operators.NODE_OT_replace_textures_script,

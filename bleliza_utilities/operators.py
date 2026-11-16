@@ -6,6 +6,96 @@ import random
 from mathutils import Vector
 
 
+class OBJECT_OT_bleliza_cleanup_meshes(bpy.types.Operator):
+    bl_idname = "object.bleliza_cleanup_meshes"
+    bl_label = "Merge by Distance & Reset Vectors"
+    bl_description = (
+        "Select all visible geometry in selected meshes, merge vertices within "
+        "0.0001 m and reset normal vectors, then return to Object Mode"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode in {'OBJECT', 'EDIT_MESH'} and any(
+            obj.type == 'MESH' for obj in context.selected_editable_objects
+        )
+
+    def execute(self, context):
+        selected = list(context.selected_objects)
+        active = context.view_layer.objects.active
+        meshes = [
+            obj for obj in context.selected_editable_objects
+            if obj.type == 'MESH' and obj.data.library is None
+        ]
+        if not meshes:
+            self.report({'WARNING'}, "Select at least one editable mesh object.")
+            return {'CANCELLED'}
+
+        # Match entering 0.0001 m in Blender's Merge by Distance field.
+        units = context.scene.unit_settings
+        threshold = 0.0001 / (units.scale_length if units.system != 'NONE' else 1.0)
+        counts = []
+        error = None
+        try:
+            if context.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            for obj in selected:
+                obj.select_set(False)
+            for obj in meshes:
+                obj.select_set(True)
+            context.view_layer.objects.active = meshes[0]
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            # Linked duplicates share one mesh: count and edit that mesh once.
+            data = [obj.data for obj in context.objects_in_mode_unique_data]
+            counts = [(mesh, len(bmesh.from_edit_mesh(mesh).verts)) for mesh in data]
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.remove_doubles(threshold=threshold)
+            bpy.ops.mesh.normals_tools(mode='RESET')
+        except RuntimeError as exc:
+            error = str(exc)
+        finally:
+            if context.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            for obj in meshes:
+                obj.select_set(False)
+            for obj in selected:
+                obj.select_set(True)
+            context.view_layer.objects.active = active
+
+        removed = sum(before - len(mesh.vertices) for mesh, before in counts)
+        details = [
+            f"{mesh.name}: {before} -> {len(mesh.vertices)} vertices "
+            f"({before - len(mesh.vertices)} merged)"
+            for mesh, before in counts
+        ]
+        summary = (
+            f"{len(meshes)} mesh object(s), {len(counts)} unique mesh(es); "
+            f"{removed} vertices merged at 0.0001 m; "
+            + ("cleanup incomplete" if error else "normal vectors reset")
+            + f"; {len(selected) - len(meshes)} object(s) skipped."
+        )
+        if error:
+            summary += f" {error}. Undo to revert partial changes."
+        self.report({'WARNING'} if error else {'INFO'}, summary)
+        print("[BleLIZA Mesh Cleanup] " + summary)
+        for detail in details:
+            print("  " + detail)
+
+        if not bpy.app.background:
+            def draw_summary(menu, _context):
+                menu.layout.label(text=summary)
+                for detail in details:
+                    menu.layout.label(text=detail)
+
+            context.window_manager.popup_menu(
+                draw_summary, title="Mesh cleanup summary", icon='INFO'
+            )
+        # Keep partial edits undoable if a Blender operator failed.
+        return {'FINISHED'}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level helper: bake a Mapping-node scale into a Detail UV layer
 # on EVERY mesh object in the scene that uses the given material.

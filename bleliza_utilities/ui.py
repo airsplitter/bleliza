@@ -92,6 +92,10 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+
+        layout.label(text="Mesh Cleanup (Selected):")
+        layout.operator("object.bleliza_cleanup_meshes")
+        layout.separator()
         
         layout.label(text="Snap Islands:")
         layout.prop(scene, "bleliza_terrain_obj")
