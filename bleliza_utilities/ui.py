@@ -93,6 +93,10 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
+        layout.label(text="Import:")
+        layout.operator("object.bleliza_import_files_to_collections", icon='FILE_FOLDER')
+        layout.separator()
+
         layout.label(text="Mesh Cleanup (Selected):")
         layout.operator("object.bleliza_cleanup_meshes")
         layout.separator()

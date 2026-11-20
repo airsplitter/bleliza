@@ -3,6 +3,7 @@ import os
 import re
 import bmesh
 import random
+from pathlib import Path
 from mathutils import Vector
 
 
@@ -94,6 +95,185 @@ class OBJECT_OT_bleliza_cleanup_meshes(bpy.types.Operator):
             )
         # Keep partial edits undoable if a Blender operator failed.
         return {'FINISHED'}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Import every file of a directory into its own collection
+# ─────────────────────────────────────────────────────────────────────────────
+
+# (enum id, label, extensions, importer operators in order of preference).
+# Blender 3.6 ships new built-in OBJ/STL/PLY importers next to the legacy
+# add-ons; the first operator that exists is used.
+_IMPORT_FORMATS = (
+    ('BLEND', ".blend", {'.blend'}, ()),
+    ('FBX', "FBX", {'.fbx'}, (('import_scene', 'fbx'),)),
+    ('OBJ', "OBJ", {'.obj'}, (('wm', 'obj_import'), ('import_scene', 'obj'))),
+    ('GLTF', "glTF", {'.gltf', '.glb'}, (('import_scene', 'gltf'),)),
+    ('STL', "STL", {'.stl'}, (('wm', 'stl_import'), ('import_mesh', 'stl'))),
+    ('PLY', "PLY", {'.ply'}, (('wm', 'ply_import'), ('import_mesh', 'ply'))),
+)
+_IMPORTERS_BY_EXTENSION = {
+    ext: importers for _id, _label, exts, importers in _IMPORT_FORMATS for ext in exts
+}
+
+
+def _append_blend_objects(filepath):
+    """Append every object stored in a .blend file."""
+    with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+        data_to.objects = list(data_from.objects)
+
+
+def _import_with_operator(filepath, importers):
+    """Run the first available importer operator for a non-.blend file."""
+    for module, name in importers:
+        try:
+            result = getattr(getattr(bpy.ops, module), name)(filepath=filepath)
+        except AttributeError:
+            continue  # Operator not available (add-on disabled or not shipped).
+        if 'FINISHED' not in result:
+            raise RuntimeError(f"importer returned {sorted(result)}")
+        return
+    raise RuntimeError("no importer available; enable the matching import add-on")
+
+
+class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
+    bl_idname = "object.bleliza_import_files_to_collections"
+    bl_label = "Import Files to Collections"
+    bl_description = (
+        "Import every supported file in a directory into a new collection "
+        "named after the file"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    directory: bpy.props.StringProperty(
+        name="Directory",
+        description="Directory to search for files",
+        subtype='DIR_PATH',
+    )
+    filter_folder: bpy.props.BoolProperty(default=True, options={'HIDDEN'})
+    recursive: bpy.props.BoolProperty(
+        name="Include Subdirectories",
+        description="Also search all subdirectories",
+        default=False,
+    )
+    keep_extension: bpy.props.BoolProperty(
+        name="Keep File Extension",
+        description="Name collections like 'chair.fbx' instead of 'chair'",
+        default=False,
+    )
+    file_types: bpy.props.EnumProperty(
+        name="File Types",
+        description="File types to import",
+        items=[(fid, label, f"Import {label} files") for fid, label, _e, _i in _IMPORT_FORMATS],
+        options={'ENUM_FLAG'},
+        default={fid for fid, _l, _e, _i in _IMPORT_FORMATS},
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "recursive")
+        layout.prop(self, "keep_extension")
+        layout.label(text="File Types:")
+        layout.column(align=True).prop(self, "file_types")
+
+    def _find_files(self, directory):
+        extensions = set()
+        for fid, _label, exts, _importers in _IMPORT_FORMATS:
+            if fid in self.file_types:
+                extensions |= exts
+        current = Path(bpy.data.filepath).resolve() if bpy.data.filepath else None
+        return [
+            path for path in sorted(directory.glob("**/*" if self.recursive else "*"))
+            if path.is_file()
+            and not path.name.startswith(".")
+            and path.suffix.lower() in extensions
+            and path.resolve() != current
+        ]
+
+    def execute(self, context):
+        directory = Path(bpy.path.abspath(self.directory)) if self.directory else None
+        if directory is None or not directory.is_dir():
+            self.report({'ERROR'}, f"Not a directory: {self.directory or '(none)'}")
+            return {'CANCELLED'}
+        files = self._find_files(directory)
+        if not files:
+            self.report({'WARNING'}, f"No supported files found in {directory}")
+            return {'CANCELLED'}
+
+        imported, failed = [], []
+        changed = False
+        for path in files:
+            label = str(path.relative_to(directory))
+            collection = bpy.data.collections.new(
+                path.name if self.keep_extension else path.stem
+            )
+            context.scene.collection.children.link(collection)
+            before = {obj.as_pointer() for obj in bpy.data.objects}
+            error = None
+            try:
+                if path.suffix.lower() == '.blend':
+                    _append_blend_objects(str(path))
+                else:
+                    _import_with_operator(
+                        str(path), _IMPORTERS_BY_EXTENSION[path.suffix.lower()]
+                    )
+            except Exception as exc:  # Importers raise many exception types.
+                lines = str(exc).strip().splitlines()
+                error = lines[-1] if lines else repr(exc)
+
+            # Move everything the file created into its collection only, even
+            # after a partial failure, so nothing lands in the active collection.
+            objects = [o for o in bpy.data.objects if o.as_pointer() not in before]
+            for obj in objects:
+                for old in list(obj.users_collection):
+                    old.objects.unlink(obj)
+                collection.objects.link(obj)
+
+            if error and not objects:
+                bpy.data.collections.remove(collection)
+                failed.append(f"{label}: {error}")
+            elif error:
+                changed = True
+                failed.append(f"{label}: partially imported "
+                              f"({len(objects)} object(s) in '{collection.name}'): {error}")
+            else:
+                changed = True
+                imported.append(f"{label}: {len(objects)} object(s) -> '{collection.name}'")
+
+        summary = (f"Imported {len(imported)} of {len(files)} file(s) into collections"
+                   + (f"; {len(failed)} failed" if failed else "") + ".")
+        details = imported + [f"FAILED {line}" for line in failed]
+        self.report({'WARNING'} if failed else {'INFO'}, summary)
+        print("[BleLIZA Import to Collections] " + summary)
+        for line in details:
+            print("  " + line)
+
+        if not bpy.app.background:
+            def draw_summary(menu, _context):
+                menu.layout.label(text=summary)
+                for line in details:
+                    menu.layout.label(text=line)
+
+            context.window_manager.popup_menu(
+                draw_summary, title="Import summary",
+                icon='ERROR' if failed else 'INFO',
+            )
+        return {'FINISHED'} if changed else {'CANCELLED'}
+
+
+def menu_func_import_to_collections(self, context):
+    self.layout.operator(
+        OBJECT_OT_bleliza_import_files_to_collections.bl_idname,
+        text="Directory to Collections (BleLIZA)",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

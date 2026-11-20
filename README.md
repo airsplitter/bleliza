@@ -13,3 +13,22 @@ processed, matching Blender's Select All behavior. Shared mesh data is processed
 once and affects all its instances, including unselected instances. The merge
 distance respects scene units and uses mesh-local coordinates, just like the
 native Edit Mode operation; object transforms are not applied. Use Undo to revert.
+
+## Import files to collections
+
+**File > Import > Directory to Collections (BleLIZA)**, or **Object Properties >
+BleLIZA Object Tools > Import Files to Collections**, opens a directory browser.
+Every supported file in the chosen directory gets its own new collection, named
+after the file, containing all objects from that file:
+
+- `.blend`: every object stored in the file is appended, including objects that
+  are not linked to any scene there. Parenting, modifiers and materials are kept.
+- FBX, OBJ, glTF/GLB, STL and PLY: imported with Blender's importer, then moved
+  from the active collection into the new collection.
+
+Options in the browser sidebar: include subdirectories, keep the file extension
+in the collection name, and choose the file types. The currently open `.blend`,
+hidden files and other extensions are skipped. A file that fails to import is
+listed in the summary and gets no collection; if it failed after creating
+objects, those objects stay in its collection and the file is reported as
+partially imported. Duplicate collection names get Blender's `.001` suffix.

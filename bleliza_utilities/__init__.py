@@ -19,6 +19,7 @@ importlib.reload(ui)
 
 classes = (
     operators.OBJECT_OT_bleliza_cleanup_meshes,
+    operators.OBJECT_OT_bleliza_import_files_to_collections,
     operators.NODE_OT_create_preset_2020,
     operators.NODE_OT_create_preset_2024,
     operators.NODE_OT_replace_textures_script,
@@ -46,6 +47,7 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    bpy.types.TOPBAR_MT_file_import.append(operators.menu_func_import_to_collections)
     
     bpy.types.Scene.bleliza_rows = bpy.props.IntProperty(
         name="Rows",
@@ -111,6 +113,7 @@ def register():
     )
 
 def unregister():
+    bpy.types.TOPBAR_MT_file_import.remove(operators.menu_func_import_to_collections)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     
