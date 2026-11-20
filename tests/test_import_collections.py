@@ -69,6 +69,32 @@ try:
         raise AssertionError("missing directory must report an error")
     print("PASS: empty and missing directories")
 
+    # Two source files use material "Paint", which already exists in the scene.
+    shared = root / "materials"
+    shared.mkdir()
+    paint = bpy.data.materials.new("Paint")
+    paint.use_nodes = True
+    texture = paint.node_tree.nodes.new('ShaderNodeTexImage')
+    texture.image = bpy.data.images.new("PaintTex", 4, 4)
+    for name in ("SignA", "SignB"):
+        sign_mesh = bpy.data.meshes.new(name + "Mesh")
+        sign_mesh.materials.append(paint)
+        sign = bpy.data.objects.new(name, sign_mesh)
+        bpy.data.libraries.write(str(shared / f"{name.lower()}.blend"), {sign})
+        bpy.data.objects.remove(sign)
+        bpy.data.meshes.remove(sign_mesh)
+
+    assert op(directory=str(shared)) == {'FINISHED'}
+    for name in ("SignA", "SignB"):
+        assert bpy.data.objects[name].material_slots[0].material == paint, name
+    assert "Paint.001" not in bpy.data.materials
+    assert [i.name for i in bpy.data.images] == ["PaintTex"]
+    print("PASS: existing material reused, duplicate material and image removed")
+
+    assert op(directory=str(shared), reuse_materials=False) == {'FINISHED'}
+    assert bpy.data.objects["SignA.001"].material_slots[0].material.name == "Paint.001"
+    print("PASS: material reuse can be turned off")
+
     bleliza_utilities.unregister()
     print("PASS: registration and unregistration")
 finally:

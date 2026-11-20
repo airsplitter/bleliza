@@ -136,6 +136,32 @@ def _import_with_operator(filepath, importers):
     raise RuntimeError("no importer available; enable the matching import add-on")
 
 
+# Blender's duplicate-name suffix: "Name.001", "Name.002", ...
+_NUMBER_SUFFIX = re.compile(r"^(?P<base>.+)\.\d{3,}$")
+
+
+def _reuse_existing_materials(materials_before, images_before):
+    """Replace new "Name.001" materials with the "Name" material that existed
+    before the import, then delete the copies and the new images only they
+    used. Returns the number of reused materials."""
+    new_materials = [m for m in bpy.data.materials if m.as_pointer() not in materials_before]
+    reused = 0
+    for material in new_materials:
+        match = _NUMBER_SUFFIX.match(material.name)
+        existing = bpy.data.materials.get(match.group("base")) if match else None
+        if existing is None or existing.as_pointer() not in materials_before:
+            continue
+        material.user_remap(existing)
+        bpy.data.materials.remove(material)
+        reused += 1
+
+    if reused:
+        for image in [i for i in bpy.data.images if i.as_pointer() not in images_before]:
+            if image.users == 0:
+                bpy.data.images.remove(image)
+    return reused
+
+
 class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
     bl_idname = "object.bleliza_import_files_to_collections"
     bl_label = "Import Files to Collections"
@@ -161,6 +187,14 @@ class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
         description="Name collections like 'chair.fbx' instead of 'chair'",
         default=False,
     )
+    reuse_materials: bpy.props.BoolProperty(
+        name="Reuse Existing Materials",
+        description=(
+            "Use an existing material with the same name instead of importing "
+            "it again as 'Name.001'"
+        ),
+        default=True,
+    )
     file_types: bpy.props.EnumProperty(
         name="File Types",
         description="File types to import",
@@ -181,6 +215,7 @@ class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
         layout = self.layout
         layout.prop(self, "recursive")
         layout.prop(self, "keep_extension")
+        layout.prop(self, "reuse_materials")
         layout.label(text="File Types:")
         layout.column(align=True).prop(self, "file_types")
 
@@ -210,6 +245,7 @@ class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
 
         imported, failed = [], []
         changed = False
+        reused_total = 0
         for path in files:
             label = str(path.relative_to(directory))
             collection = bpy.data.collections.new(
@@ -217,6 +253,8 @@ class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
             )
             context.scene.collection.children.link(collection)
             before = {obj.as_pointer() for obj in bpy.data.objects}
+            materials_before = {m.as_pointer() for m in bpy.data.materials}
+            images_before = {i.as_pointer() for i in bpy.data.images}
             error = None
             try:
                 if path.suffix.lower() == '.blend':
@@ -236,6 +274,9 @@ class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
                 for old in list(obj.users_collection):
                     old.objects.unlink(obj)
                 collection.objects.link(obj)
+            reused = (_reuse_existing_materials(materials_before, images_before)
+                      if self.reuse_materials else 0)
+            reused_total += reused
 
             if error and not objects:
                 bpy.data.collections.remove(collection)
@@ -246,9 +287,11 @@ class OBJECT_OT_bleliza_import_files_to_collections(bpy.types.Operator):
                               f"({len(objects)} object(s) in '{collection.name}'): {error}")
             else:
                 changed = True
-                imported.append(f"{label}: {len(objects)} object(s) -> '{collection.name}'")
+                imported.append(f"{label}: {len(objects)} object(s) -> '{collection.name}'"
+                                + (f", {reused} material(s) reused" if reused else ""))
 
         summary = (f"Imported {len(imported)} of {len(files)} file(s) into collections"
+                   + (f"; {reused_total} existing material(s) reused" if reused_total else "")
                    + (f"; {len(failed)} failed" if failed else "") + ".")
         details = imported + [f"FAILED {line}" for line in failed]
         self.report({'WARNING'} if failed else {'INFO'}, summary)

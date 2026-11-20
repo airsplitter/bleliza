@@ -27,7 +27,13 @@ after the file, containing all objects from that file:
   from the active collection into the new collection.
 
 Options in the browser sidebar: include subdirectories, keep the file extension
-in the collection name, and choose the file types. The currently open `.blend`,
+in the collection name, reuse existing materials, and choose the file types.
+
+**Reuse Existing Materials** (on by default): when an imported material arrives
+as `Name.001` because `Name` already existed before that file was imported, its
+users are switched to the existing `Name` and the copy is deleted, together
+with new images that only the copy used. This also applies between files of the
+same run. Materials are matched by name only; the existing one wins. The currently open `.blend`,
 hidden files and other extensions are skipped. A file that fails to import is
 listed in the summary and gets no collection; if it failed after creating
 objects, those objects stay in its collection and the file is reported as
