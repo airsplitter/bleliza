@@ -1,10 +1,12 @@
 import bpy
 import os
 import re
+import math
 import bmesh
 import random
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from mathutils import Vector
+from mathutils import Matrix, Quaternion, Vector
 
 
 class OBJECT_OT_bleliza_cleanup_meshes(bpy.types.Operator):
@@ -321,6 +323,10 @@ def menu_func_import_to_collections(self, context):
         OBJECT_OT_bleliza_lod_collections_to_empties.bl_idname,
         text="LOD Collections to Empties (BleLIZA)",
     )
+    self.layout.operator(
+        OBJECT_OT_bleliza_place_from_scenery_xml.bl_idname,
+        text="Scenery XML Positions (BleLIZA)",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -493,6 +499,268 @@ class OBJECT_OT_bleliza_lod_collections_to_empties(bpy.types.Operator):
 
             context.window_manager.popup_menu(
                 draw_summary, title="LOD collections summary", icon='INFO'
+            )
+        return {'FINISHED'}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Move objects to the lat/lon positions of an MSFS scenery XML file
+# ─────────────────────────────────────────────────────────────────────────────
+
+_WGS84_A = 6378137.0
+_WGS84_E2 = 6.69437999014e-3
+_SCENERY_NAME = re.compile(r"^\s*SceneryObject name:\s*(?P<name>.*?)\s*$")
+
+
+def _parse_float(value):
+    """Return value as a finite float, or None. Accepts a decimal comma."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(str(value).strip().replace(",", "."))
+    except ValueError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _ecef(lat, lon):
+    lat, lon = math.radians(lat), math.radians(lon)
+    n = _WGS84_A / math.sqrt(1.0 - _WGS84_E2 * math.sin(lat) ** 2)
+    return (n * math.cos(lat) * math.cos(lon),
+            n * math.cos(lat) * math.sin(lon),
+            n * (1.0 - _WGS84_E2) * math.sin(lat))
+
+
+def _east_north(lat, lon, origin_lat, origin_lon):
+    """Metres east and north of the origin in its local tangent plane (WGS84)."""
+    x, y, z = _ecef(lat, lon)
+    x0, y0, z0 = _ecef(origin_lat, origin_lon)
+    dx, dy, dz = x - x0, y - y0, z - z0
+    lat0, lon0 = math.radians(origin_lat), math.radians(origin_lon)
+    east = -math.sin(lon0) * dx + math.cos(lon0) * dy
+    north = (-math.sin(lat0) * math.cos(lon0) * dx
+             - math.sin(lat0) * math.sin(lon0) * dy
+             + math.cos(lat0) * dz)
+    return east, north
+
+
+def _read_scenery_objects(filepath):
+    """Return ([(name, attributes)], unnamed count) for the SceneryObjects of a file.
+
+    The name comes from the comment "<!--SceneryObject name: X-->" directly
+    before a SceneryObject element, at any nesting depth.
+    """
+    parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+    root = ET.parse(filepath, parser=parser).getroot()
+    found, unnamed = [], 0
+    for parent in root.iter():
+        name = None
+        for child in parent:
+            if child.tag is ET.Comment:
+                match = _SCENERY_NAME.match(child.text or "")
+                if match:
+                    name = match.group("name")
+                continue
+            if child.tag == "SceneryObject":
+                if name:
+                    found.append((name, dict(child.attrib)))
+                else:
+                    unnamed += 1
+            name = None
+    return found, unnamed
+
+
+def _origin_from_scene(scene):
+    lat, lon = _parse_float(scene.get("lat")), _parse_float(scene.get("lon"))
+    if lat is None or lon is None:
+        return None
+    return lat, lon
+
+
+class OBJECT_OT_bleliza_place_from_scenery_xml(bpy.types.Operator):
+    bl_idname = "object.bleliza_place_from_scenery_xml"
+    bl_label = "Place Objects from Scenery XML"
+    bl_description = (
+        "Move objects of the active collection to the lat/lon position of the "
+        "SceneryObject with the same name in an MSFS scenery XML file"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filepath: bpy.props.StringProperty(
+        name="XML File",
+        description="Scenery XML file with SceneryObject positions",
+        subtype='FILE_PATH',
+    )
+    filter_glob: bpy.props.StringProperty(default="*.xml", options={'HIDDEN'})
+    filter_folder: bpy.props.BoolProperty(default=True, options={'HIDDEN'})
+    # Strings, because a FloatProperty is single precision: about 0.4 m at 60° latitude.
+    origin_lat: bpy.props.StringProperty(
+        name="Origin Latitude",
+        description=(
+            "Latitude of the scene origin in decimal degrees, north positive. "
+            "Empty = scene custom property 'lat'"
+        ),
+        options={'SKIP_SAVE'},
+    )
+    origin_lon: bpy.props.StringProperty(
+        name="Origin Longitude",
+        description=(
+            "Longitude of the scene origin in decimal degrees, east positive. "
+            "Empty = scene custom property 'lon'"
+        ),
+        options={'SKIP_SAVE'},
+    )
+    store_origin: bpy.props.BoolProperty(
+        name="Save Origin in Scene",
+        description="Write the origin to the scene custom properties 'lat' and 'lon'",
+        default=True,
+    )
+    apply_heading: bpy.props.BoolProperty(
+        name="Apply Heading",
+        description=(
+            "Set the rotation to the heading of the file (clockwise from north "
+            "around Z; pitch and bank are ignored). Off = keep the current rotation"
+        ),
+        default=True,
+    )
+    set_altitude: bpy.props.BoolProperty(
+        name="Set Altitude",
+        description="Set Z to the alt value of the file in metres. Off = keep the current Z",
+        default=False,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def invoke(self, context, event):
+        origin = _origin_from_scene(context.scene)
+        if origin is not None:
+            self.origin_lat, self.origin_lon = (repr(value) for value in origin)
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        box = layout.box()
+        box.label(text="Scene Origin (WGS84 degrees):")
+        if not (self.origin_lat.strip() and self.origin_lon.strip()):
+            if _origin_from_scene(context.scene) is None:
+                row = box.row()
+                row.alert = True
+                row.label(text="Scene has no lat/lon: enter the origin", icon='ERROR')
+        box.prop(self, "origin_lat", text="Latitude")
+        box.prop(self, "origin_lon", text="Longitude")
+        box.prop(self, "store_origin")
+        layout.prop(self, "apply_heading")
+        layout.prop(self, "set_altitude")
+
+    def _origin(self, scene):
+        """Return ((lat, lon), None) or (None, error message)."""
+        if self.origin_lat.strip() or self.origin_lon.strip():
+            origin = (_parse_float(self.origin_lat), _parse_float(self.origin_lon))
+            source = "Origin Latitude/Longitude"
+        else:
+            origin = (_parse_float(scene.get("lat")), _parse_float(scene.get("lon")))
+            source = "scene custom properties lat/lon"
+            if origin == (None, None):
+                return None, ("Scene origin unknown: enter Origin Latitude/Longitude "
+                              "or add scene custom properties 'lat' and 'lon'")
+        lat, lon = origin
+        if lat is None or lon is None or not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            return None, f"Invalid {source}: expected decimal degrees"
+        return origin, None
+
+    @staticmethod
+    def _place(context, obj, east, north, alt, heading):
+        if obj.parent is not None:
+            # The parent may have been moved in this run; refresh matrix_world.
+            context.view_layer.update()
+        location, rotation, scale = obj.matrix_world.decompose()
+        location = Vector((east, north, location.z if alt is None else alt))
+        if heading is not None:
+            # MSFS heading turns clockwise seen from above; Blender's Z rotation
+            # turns counterclockwise. Scene +Y is north, +X is east.
+            rotation = Quaternion((0.0, 0.0, 1.0), -math.radians(heading))
+        obj.matrix_world = Matrix.LocRotScale(location, rotation, scale)
+
+    def execute(self, context):
+        filepath = Path(bpy.path.abspath(self.filepath)) if self.filepath else None
+        if filepath is None or not filepath.is_file():
+            self.report({'ERROR'}, f"XML file not found: {self.filepath or '(none)'}")
+            return {'CANCELLED'}
+        origin, problem = self._origin(context.scene)
+        if origin is None:
+            self.report({'ERROR'}, problem)
+            return {'CANCELLED'}
+        try:
+            entries, unnamed = _read_scenery_objects(str(filepath))
+        except (ET.ParseError, OSError) as exc:
+            self.report({'ERROR'}, f"Could not read {filepath.name}: {exc}")
+            return {'CANCELLED'}
+
+        collection = context.collection
+        objects = {obj.name: obj for obj in collection.all_objects}
+        context.view_layer.update()  # matrix_world must reflect pending edits
+        placed, not_found, invalid, duplicates, linked = [], [], [], [], []
+        seen = set()
+        for name, attributes in entries:
+            if name in seen:
+                duplicates.append(name)
+                continue
+            seen.add(name)
+            obj = objects.get(name)
+            if obj is None:
+                not_found.append(name)
+                continue
+            if obj.library is not None:
+                linked.append(name)
+                continue
+            lat = _parse_float(attributes.get("lat"))
+            lon = _parse_float(attributes.get("lon"))
+            alt = _parse_float(attributes.get("alt")) if self.set_altitude else None
+            heading = _parse_float(attributes.get("heading")) if self.apply_heading else None
+            if (lat is None or lon is None or not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0)
+                    or (self.set_altitude and alt is None)
+                    or (self.apply_heading and heading is None)):
+                invalid.append(name)
+                continue
+            east, north = _east_north(lat, lon, *origin)
+            self._place(context, obj, east, north, alt, heading)
+            placed.append(name)
+
+        if placed and self.store_origin:
+            context.scene["lat"], context.scene["lon"] = origin
+
+        details = [f"Origin: lat {origin[0]!r}, lon {origin[1]!r}"]
+        for label, names in (("Not in collection", not_found),
+                             ("Invalid position", invalid),
+                             ("Duplicate in file, first entry used", duplicates),
+                             ("Linked object, cannot move", linked)):
+            if names:
+                shown = ", ".join(names[:10]) + (f" … (+{len(names) - 10})" if len(names) > 10 else "")
+                details.append(f"{label} ({len(names)}): {shown}")
+        if unnamed:
+            details.append(f"{unnamed} SceneryObject(s) without a name comment ignored")
+
+        summary = (f"Placed {len(placed)} of {len(entries)} named SceneryObject(s) "
+                   f"from {filepath.name} in '{collection.name}'.")
+        print("[BleLIZA Place from Scenery XML] " + summary)
+        for line in details:
+            print("  " + line)
+        if not placed:
+            self.report({'WARNING'}, summary)
+            return {'CANCELLED'}
+        self.report({'INFO'}, summary)
+
+        if not bpy.app.background:
+            def draw_summary(menu, _context):
+                menu.layout.label(text=summary)
+                for line in details:
+                    menu.layout.label(text=line)
+
+            context.window_manager.popup_menu(
+                draw_summary, title="Scenery XML placement summary", icon='INFO'
             )
         return {'FINISHED'}
 

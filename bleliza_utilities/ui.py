@@ -96,6 +96,7 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         layout.label(text="Import:")
         layout.operator("object.bleliza_import_files_to_collections", icon='FILE_FOLDER')
         layout.operator("object.bleliza_lod_collections_to_empties", icon='OUTLINER_OB_GROUP_INSTANCE')
+        layout.operator("object.bleliza_place_from_scenery_xml", icon='WORLD')
         layout.separator()
 
         layout.label(text="Mesh Cleanup (Selected):")

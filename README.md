@@ -71,3 +71,37 @@ Collections without an LOD suffix still get a parent empty with one instance.
 All empties are placed at the world origin. Running it again creates a second
 set of empties with `.001` names. If an exporter ignores collection instances,
 use **Object > Apply > Make Instances Real** on the instance empties.
+
+## Place objects from scenery XML
+
+**File > Import > Scenery XML Positions (BleLIZA)**, or **Object Properties >
+BleLIZA Object Tools > Place Objects from Scenery XML**, opens an `.xml` file
+browser for an MSFS scenery file. Each `SceneryObject` is named by the comment
+directly before it:
+
+```xml
+<!--SceneryObject name: LOTUS_wasserfilter_001-->
+<SceneryObject lat="60.21456851714919" lon="11.09151156430177" alt="0.0" heading="-157.677622" ...>
+```
+
+An object of the active collection (including its child collections) with the
+same name, for example an empty holding linked collections, is moved to that
+position. Other objects stay where they are.
+
+Positions are converted to metres in the local tangent plane of the scene
+origin on the WGS84 ellipsoid: +X is east, +Y is north, the origin is (0, 0).
+The origin comes from the scene custom properties `lat` and `lon` (decimal
+degrees). If the scene has none, enter the origin in the browser sidebar;
+**Save Origin in Scene** (on) then writes it to the scene properties, so the
+next run uses the same origin.
+
+Options in the browser sidebar:
+
+- **Apply Heading** (on): sets the rotation to the file's heading, clockwise
+  from north around Z. Pitch and bank are ignored. Off keeps the rotation.
+- **Set Altitude** (off): sets Z to the file's `alt` value in metres. Off keeps
+  the current Z. With `altitudeIsAgl="TRUE"`, `alt` is the height above ground.
+
+Parented objects are placed in world space. The summary lists names from the
+file that were not found in the active collection, invalid positions and
+duplicate names (the first entry is used).
