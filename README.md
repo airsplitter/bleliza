@@ -38,3 +38,36 @@ hidden files and other extensions are skipped. A file that fails to import is
 listed in the summary and gets no collection; if it failed after creating
 objects, those objects stay in its collection and the file is reported as
 partially imported. Duplicate collection names get Blender's `.001` suffix.
+
+## LOD collections to empties
+
+**File > Import > LOD Collections to Empties (BleLIZA)**, or **Object Properties >
+BleLIZA Object Tools > LOD Collections to Empties**, opens a `.blend` file
+browser. All collections of the chosen file are loaded and grouped by their name
+without the `_LOD<n>` suffix. Blender cannot parent a collection to an object,
+so each collection becomes a collection-instance empty under a plain parent
+empty:
+
+```
+ENGM_TaxiSigns_268                (plain empty)
+├── ENGM_TaxiSigns_268_LOD0       (instance of collection ENGM_TaxiSigns_268_LOD0)
+├── ENGM_TaxiSigns_268_LOD1
+└── ENGM_TaxiSigns_268_LOD2
+```
+
+Options in the browser sidebar:
+
+- **Link** (on): linked collections are read-only and follow changes to the
+  source file. Turn it off to append editable copies.
+- **Skip Container Collections** (on): collections that hold only other
+  collections are skipped, so their LODs are not instanced twice.
+- **LOD Pattern**: case-insensitive regular expression; group `base` names the
+  parent empty, optional group `lod` sorts the LODs numerically.
+- **Target Collection**: collection for the new empties, created if missing;
+  empty means the active collection.
+- **Empty Size**: display size of the new empties.
+
+Collections without an LOD suffix still get a parent empty with one instance.
+All empties are placed at the world origin. Running it again creates a second
+set of empties with `.001` names. If an exporter ignores collection instances,
+use **Object > Apply > Make Instances Real** on the instance empties.

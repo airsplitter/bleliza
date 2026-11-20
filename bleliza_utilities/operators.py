@@ -317,6 +317,184 @@ def menu_func_import_to_collections(self, context):
         OBJECT_OT_bleliza_import_files_to_collections.bl_idname,
         text="Directory to Collections (BleLIZA)",
     )
+    self.layout.operator(
+        OBJECT_OT_bleliza_lod_collections_to_empties.bl_idname,
+        text="LOD Collections to Empties (BleLIZA)",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Group the collections of a .blend file under one empty per LOD base name
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_collections(filepath, link):
+    """Link or append every collection; return (name in source file, collection)."""
+    with bpy.data.libraries.load(filepath, link=link) as (data_from, data_to):
+        names = [str(name) for name in data_from.collections]
+        # Blender replaces the entries of this list with the loaded collections,
+        # so it must be a separate list from `names`.
+        data_to.collections = list(names)
+    # Appended collections may be renamed ("X.001"), so keep the source names.
+    return [(n, c) for n, c in zip(names, data_to.collections) if c is not None]
+
+
+class OBJECT_OT_bleliza_lod_collections_to_empties(bpy.types.Operator):
+    bl_idname = "object.bleliza_lod_collections_to_empties"
+    bl_label = "LOD Collections to Empties"
+    bl_description = (
+        "Load all collections from a .blend file and group them as collection "
+        "instances under one empty per name without the _LOD<n> suffix"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filepath: bpy.props.StringProperty(
+        name="Blend File",
+        description="Blend file to read the collections from",
+        subtype='FILE_PATH',
+    )
+    filter_glob: bpy.props.StringProperty(default="*.blend", options={'HIDDEN'})
+    filter_blender: bpy.props.BoolProperty(default=True, options={'HIDDEN'})
+    filter_folder: bpy.props.BoolProperty(default=True, options={'HIDDEN'})
+    link: bpy.props.BoolProperty(
+        name="Link",
+        description=(
+            "Link the collections (read-only, follows changes to the source "
+            "file); turn off to append editable copies"
+        ),
+        default=True,
+    )
+    lod_pattern: bpy.props.StringProperty(
+        name="LOD Pattern",
+        description=(
+            "Regular expression (case-insensitive) for LOD collection names. "
+            "Group 'base' names the parent empty, optional group 'lod' sorts the LODs"
+        ),
+        default=r"^(?P<base>.+?)_LOD(?P<lod>\d+)$",
+    )
+    skip_container_collections: bpy.props.BoolProperty(
+        name="Skip Container Collections",
+        description="Skip collections that hold only other collections and no objects",
+        default=True,
+    )
+    target_collection: bpy.props.StringProperty(
+        name="Target Collection",
+        description="Collection for the new empties, created if missing; empty = active collection",
+        default="",
+    )
+    empty_size: bpy.props.FloatProperty(
+        name="Empty Size",
+        description="Display size of the new empties",
+        default=1.0,
+        min=0.001,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "link")
+        layout.prop(self, "skip_container_collections")
+        layout.prop(self, "lod_pattern")
+        layout.prop(self, "target_collection")
+        layout.prop(self, "empty_size")
+
+    def _target(self, context):
+        if not self.target_collection:
+            return context.collection
+        collection = bpy.data.collections.get(self.target_collection)
+        if collection is None:
+            collection = bpy.data.collections.new(self.target_collection)
+            context.scene.collection.children.link(collection)
+        return collection
+
+    def _new_empty(self, name, target, parent=None, instance=None):
+        empty = bpy.data.objects.new(name, None)
+        empty.empty_display_size = self.empty_size
+        if instance is not None:
+            empty.instance_type = 'COLLECTION'
+            empty.instance_collection = instance
+        target.objects.link(empty)
+        empty.parent = parent
+        return empty
+
+    def execute(self, context):
+        filepath = Path(bpy.path.abspath(self.filepath)) if self.filepath else None
+        if filepath is None or not filepath.is_file():
+            self.report({'ERROR'}, f"Blend file not found: {self.filepath or '(none)'}")
+            return {'CANCELLED'}
+        if bpy.data.filepath and filepath.resolve() == Path(bpy.data.filepath).resolve():
+            self.report({'ERROR'}, "Choose a different .blend file than the one that is open")
+            return {'CANCELLED'}
+        try:
+            lod_re = re.compile(self.lod_pattern, re.IGNORECASE)
+        except re.error as exc:
+            self.report({'ERROR'}, f"Invalid LOD pattern: {exc}")
+            return {'CANCELLED'}
+        if "base" not in lod_re.groupindex:
+            self.report({'ERROR'}, "LOD pattern needs a named group (?P<base>...)")
+            return {'CANCELLED'}
+
+        def sort_key(item):
+            """Order by LOD number, so LOD10 comes after LOD2."""
+            match = lod_re.match(item[0])
+            lod = match.group("lod") if match and "lod" in lod_re.groupindex else None
+            return (int(lod) if lod and lod.isdigit() else -1, item[0])
+
+        try:
+            loaded = _load_collections(str(filepath), self.link)
+        except OSError as exc:
+            self.report({'ERROR'}, f"Could not read {filepath.name}: {exc}")
+            return {'CANCELLED'}
+
+        groups, skipped = {}, []
+        for name, collection in loaded:
+            if (self.skip_container_collections
+                    and collection.children and not collection.objects):
+                skipped.append(name)
+                continue
+            match = lod_re.match(name)
+            base = match.group("base") if match and match.group("base") else name
+            groups.setdefault(base, []).append((name, collection))
+        if not groups:
+            self.report({'WARNING'}, f"No collections to group in {filepath.name}")
+            return {'CANCELLED'}
+
+        target = self._target(context)
+        details = []
+        for base in sorted(groups):
+            parent = self._new_empty(base, target)
+            members = sorted(groups[base], key=sort_key)
+            for name, collection in members:
+                self._new_empty(name, target, parent=parent, instance=collection)
+            details.append(f"{parent.name}: {', '.join(n for n, _ in members)}")
+        details += [f"Skipped {name}: contains only other collections" for name in skipped]
+
+        summary = (f"Created {len(groups)} parent empties for "
+                   f"{sum(len(m) for m in groups.values())} collection(s) from "
+                   f"{filepath.name} in '{target.name}'"
+                   + (f"; {len(skipped)} container collection(s) skipped" if skipped else "")
+                   + ".")
+        self.report({'INFO'}, summary)
+        print("[BleLIZA LOD Collections to Empties] " + summary)
+        for line in details:
+            print("  " + line)
+
+        if not bpy.app.background:
+            def draw_summary(menu, _context):
+                menu.layout.label(text=summary)
+                for line in details:
+                    menu.layout.label(text=line)
+
+            context.window_manager.popup_menu(
+                draw_summary, title="LOD collections summary", icon='INFO'
+            )
+        return {'FINISHED'}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
