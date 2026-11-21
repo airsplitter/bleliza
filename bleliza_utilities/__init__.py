@@ -37,6 +37,7 @@ classes = (
     operators.OBJECT_OT_merge_duplicate_materials,
     operators.OBJECT_OT_remove_unused_materials,
     operators.NODE_OT_bake_mapping_to_detail_uv,
+    operators.NODE_OT_add_emissive_from_dds,
     operators.OBJECT_OT_remove_non_aliza_custom_props,
     operators.OBJECT_OT_remove_non_aliza_material_custom_props,
     operators.OBJECT_OT_make_real_trees,
@@ -114,6 +115,15 @@ def register():
         min=0.0
     )
 
+    bpy.types.Scene.bleliza_emis_extra_suffixes = bpy.props.StringProperty(
+        name="Extra Emissive Suffixes",
+        description=(
+            "Comma-separated extra emissive filename suffixes to try in addition to "
+            "_EMIS, _lm, _EMISSION, _EM, _Emissive (e.g. '_glow,_LIGHT')"
+        ),
+        default="",
+    )
+
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(operators.menu_func_import_to_collections)
     for cls in reversed(classes):
@@ -129,6 +139,7 @@ def unregister():
     del bpy.types.Scene.bleliza_terrain_obj
     del bpy.types.Scene.bleliza_mat_filter
     del bpy.types.Scene.bleliza_flat_threshold
+    del bpy.types.Scene.bleliza_emis_extra_suffixes
 
 if __name__ == "__main__":
     register()

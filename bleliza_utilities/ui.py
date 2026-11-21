@@ -32,6 +32,15 @@ class MATERIAL_PT_texture_preset_panel(bpy.types.Panel):
         layout = self.layout
         layout.operator("node.create_preset_2020", text="Generate ALIZA Texture Preset from MSFS2020 Shader Mess ;-)")
         layout.operator("node.create_preset_2024", text="Generate ALIZA Texture Preset from MSFS2024 Shader Mess ;-)")
+
+        layout.separator()
+        layout.label(text="Add Emissive Texture (already converted materials):")
+        scene = context.scene
+        layout.prop(scene, "bleliza_emis_extra_suffixes", text="Extra Suffixes")
+        op_emis = layout.operator("node.add_emissive_from_dds", text="Add Emissive from DDS")
+        op_emis.extra_suffixes = scene.bleliza_emis_extra_suffixes
+
+        layout.separator()
         layout.operator("object.replace_textures_with_dds", text="Replace Texures")
         layout.operator("object.remove_empty_textures_nodes", text="Remove empty textures nodes")
         layout.operator("node.set_texture_extend", text="Set Texture Extension to EXTEND")

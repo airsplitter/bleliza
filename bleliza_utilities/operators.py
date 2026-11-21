@@ -1449,6 +1449,200 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
         self.report({'INFO'}, f"Node preset layout created for {materials_processed} material(s)")
         return {'FINISHED'}
 
+class NODE_OT_add_emissive_from_dds(bpy.types.Operator):
+    bl_idname = "node.add_emissive_from_dds"
+    bl_label = "Add Emissive Texture from DDS"
+    bl_description = (
+        "For each material on the active object: looks for a DDS emissive texture "
+        "whose name matches the Base Color texture with an emissive suffix "
+        "(_EMIS, _lm, _EMISSION or custom). Adds it as an Emissive Texture node "
+        "connected to the Emission input, using the same UV map as Base Color."
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # Suffixes that identify the 'albedo/base color' part of the filename.
+    # The first matching suffix is stripped before appending emissive suffixes.
+    _BASE_SUFFIXES = [
+        "_ALBD", "_albd", "_Albd",
+        "_ALBEDO", "_albedo", "_Albedo",
+        "_ALB", "_alb", "_Alb",
+        "_COL", "_col", "_Col",
+        "_COLOR", "_color", "_Color",
+        "_Base_Color", "_base_color",
+    ]
+
+    # Built-in emissive suffixes tried in order.
+    _EMIS_SUFFIXES = [
+        "_EMIS", "_emis", "_Emis",
+        "_lm", "_LM",
+        "_EMISSION", "_emission", "_Emission",
+        "_EM", "_em",
+        "_Emissive", "_emissive",
+    ]
+
+    extra_suffixes: bpy.props.StringProperty(
+        name="Extra Emissive Suffixes",
+        description=(
+            "Comma-separated list of additional emissive suffixes to try "
+            "(e.g. '_glow,_LIGHT'). Tried after the built-in list."
+        ),
+        default="",
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or not hasattr(obj.data, "materials") or not obj.data.materials:
+            self.report({'WARNING'}, "Active object has no materials.")
+            return {'CANCELLED'}
+
+        # Build full suffix list: built-in + user extras
+        extra = [s.strip() for s in self.extra_suffixes.split(",") if s.strip()]
+        emis_suffixes = self._EMIS_SUFFIXES + extra
+
+        processed = 0
+        skipped = 0
+        not_found = 0
+
+        for mat in obj.data.materials:
+            if not mat or not mat.use_nodes:
+                skipped += 1
+                continue
+
+            node_tree = mat.node_tree
+            nodes = node_tree.nodes
+            links = node_tree.links
+
+            # ── Skip if emissive node already present ─────────────────────────
+            if nodes.get("Emissive Texture (RGB)"):
+                skipped += 1
+                continue
+
+            # ── Find Base Color image texture node ────────────────────────────
+            base_tex_node = nodes.get("Base Color Texture")
+
+            # Fallback: texture wired into Principled BSDF Base Color
+            if not base_tex_node or not base_tex_node.image:
+                for node in nodes:
+                    if node.type != 'BSDF_PRINCIPLED':
+                        continue
+                    bc_input = node.inputs.get("Base Color")
+                    if not (bc_input and bc_input.is_linked):
+                        continue
+                    from_node = bc_input.links[0].from_node
+                    if from_node.type == 'TEX_IMAGE' and from_node.image:
+                        base_tex_node = from_node
+                    elif from_node.type in {'MIX_RGB', 'MIX'}:
+                        for idx in (1, 2):
+                            inp = from_node.inputs[idx]
+                            if inp.is_linked:
+                                cand = inp.links[0].from_node
+                                if cand.type == 'TEX_IMAGE' and cand.image:
+                                    base_tex_node = cand
+                                    break
+                    if base_tex_node and base_tex_node.image:
+                        break
+
+            if not base_tex_node or not base_tex_node.image:
+                skipped += 1
+                continue
+
+            base_image = base_tex_node.image
+            base_filepath = bpy.path.abspath(base_image.filepath).strip()
+            if not base_filepath:
+                skipped += 1
+                continue
+
+            base_path = Path(base_filepath)
+            base_dir = base_path.parent
+            base_stem = base_path.stem
+
+            # ── UV node to reuse ──────────────────────────────────────────────
+            base_uv_node = None
+            if base_tex_node.inputs["Vector"].is_linked:
+                from_node = base_tex_node.inputs["Vector"].links[0].from_node
+                if from_node.type == 'UVMAP':
+                    base_uv_node = from_node
+            if not base_uv_node:
+                for node in nodes:
+                    if node.type == 'UVMAP':
+                        base_uv_node = node
+                        break
+
+            # ── Strip base suffix to get the shared name root ─────────────────
+            stripped_stem = base_stem
+            for suf in self._BASE_SUFFIXES:
+                if base_stem.endswith(suf):
+                    stripped_stem = base_stem[: -len(suf)]
+                    break
+
+            # ── Search for emissive DDS file ──────────────────────────────────
+            found_path = None
+            for esuf in emis_suffixes:
+                for ext in (".dds", ".DDS"):
+                    candidate = base_dir / (stripped_stem + esuf + ext)
+                    if candidate.exists():
+                        found_path = candidate
+                        break
+                if found_path:
+                    break
+
+            if not found_path:
+                not_found += 1
+                print(
+                    f"[Add Emissive] No emissive DDS found for material '{mat.name}' "
+                    f"(base: {base_path.name}, root: '{stripped_stem}')"
+                )
+                continue
+
+            # ── Load image ────────────────────────────────────────────────────
+            emis_image = bpy.data.images.load(str(found_path), check_existing=True)
+
+            # ── Find Principled BSDF ──────────────────────────────────────────
+            bsdf_node = None
+            for node in nodes:
+                if node.type == 'BSDF_PRINCIPLED':
+                    bsdf_node = node
+                    break
+            if not bsdf_node:
+                skipped += 1
+                continue
+
+            # ── Create emissive texture node ──────────────────────────────────
+            emis_node = nodes.new(type="ShaderNodeTexImage")
+            emis_node.location = (
+                base_tex_node.location.x,
+                base_tex_node.location.y - 320,
+            )
+            emis_node.name = "Emissive Texture (RGB)"
+            emis_node.label = "Emissive Texture (RGB)"
+            emis_node.image = emis_image
+            emis_node.image.colorspace_settings.name = 'sRGB'
+
+            # ── Connect to Emission input (Blender 4.x / 3.x) ────────────────
+            emission_input = (
+                bsdf_node.inputs.get("Emission Color")
+                or bsdf_node.inputs.get("Emission")
+            )
+            if emission_input:
+                links.new(emis_node.outputs["Color"], emission_input)
+
+            # ── Wire the same UV map ──────────────────────────────────────────
+            if base_uv_node:
+                links.new(base_uv_node.outputs["UV"], emis_node.inputs["Vector"])
+
+            processed += 1
+            print(f"[Add Emissive] Added '{found_path.name}' to material '{mat.name}'")
+
+        msg = (
+            f"Added emissive textures to {processed} material(s)"
+            + (f"; {not_found} emissive file(s) not found" if not_found else "")
+            + (f"; {skipped} material(s) skipped" if skipped else "")
+            + "."
+        )
+        self.report({'INFO'} if processed else {'WARNING'}, msg)
+        return {'FINISHED'} if processed else {'CANCELLED'}
+
+
 class NODE_OT_replace_textures_script(bpy.types.Operator):
     bl_idname = "object.replace_textures_with_dds"
     bl_label = "Replace Textures with DDS"
