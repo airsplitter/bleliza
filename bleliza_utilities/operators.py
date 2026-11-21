@@ -893,6 +893,10 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
             base_mat_image = existing_base_mat.image if existing_base_mat and existing_base_mat.image else None
             detail_mat_image = existing_detail_mat.image if existing_detail_mat and existing_detail_mat.image else None
             normal_image = existing_normal.image if existing_normal and existing_normal.image else None
+
+            existing_emissive_tex = node_tree.nodes.get("Emissive Texture (RGB)")
+            emissive_image = existing_emissive_tex.image if existing_emissive_tex and existing_emissive_tex.image else None
+
             # Get the 'Strength' value from the existing node if it has the input
             if "Strength" in existing_normal_map_node.inputs:
                 strength_value_to_apply = existing_normal_map_node.inputs["Strength"].default_value
@@ -1089,7 +1093,21 @@ class NODE_OT_create_preset_2020(bpy.types.Operator):
             node_tree.links.new(uv_map_node.outputs["UV"], base_mat_color_node.inputs["Vector"])
             node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
             node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
-        
+
+            # --- Emissive Texture ---
+            if emissive_image:
+                emissive_tex_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+                emissive_tex_node.location = (-500, -800)
+                emissive_tex_node.name = "Emissive Texture (RGB)"
+                emissive_tex_node.image = emissive_image
+                emissive_tex_node.image.colorspace_settings.name = 'sRGB'
+                # Connect to Emission Color (Blender 4.x) or Emission (older)
+                emission_input = bsdf_node.inputs.get("Emission Color") or bsdf_node.inputs.get("Emission")
+                if emission_input:
+                    node_tree.links.new(emissive_tex_node.outputs["Color"], emission_input)
+                # Use the same UV map as the Base Color texture
+                node_tree.links.new(uv_map_node.outputs["UV"], emissive_tex_node.inputs["Vector"])
+
             # --- Bake Detail UV scale into a dedicated UV layer ---
             # Convert stored detail_scale_value (e.g. 20) → Mapping-node scale (0.2).
             # A Mapping scale of 0.2 means 1/0.2 = 5× tiling in UV space.
@@ -1199,6 +1217,9 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
             base_mat_image = existing_base_mat.image if existing_base_mat and existing_base_mat.image else None
             detail_mat_image = existing_detail_mat.image if existing_detail_mat and existing_detail_mat.image else None
             normal_image = existing_normal.image if existing_normal and existing_normal.image else None
+
+            existing_emissive_tex = node_tree.nodes.get("Emissive Texture (RGB)")
+            emissive_image = existing_emissive_tex.image if existing_emissive_tex and existing_emissive_tex.image else None
         
             # Clear existing nodes (optional – here we rebuild the node tree)
             for node in list(node_tree.nodes):
@@ -1390,7 +1411,21 @@ class NODE_OT_create_preset_2024(bpy.types.Operator):
             node_tree.links.new(uv_map_node.outputs["UV"], base_mat_color_node.inputs["Vector"])
             node_tree.links.new(uv_map_node.outputs["UV"], detail_mat_color_node.inputs["Vector"])
             node_tree.links.new(uv_map_node.outputs["UV"], normal_color_node.inputs["Vector"])
-        
+
+            # --- Emissive Texture ---
+            if emissive_image:
+                emissive_tex_node = node_tree.nodes.new(type="ShaderNodeTexImage")
+                emissive_tex_node.location = (-500, -800)
+                emissive_tex_node.name = "Emissive Texture (RGB)"
+                emissive_tex_node.image = emissive_image
+                emissive_tex_node.image.colorspace_settings.name = 'sRGB'
+                # Connect to Emission Color (Blender 4.x) or Emission (older)
+                emission_input = bsdf_node.inputs.get("Emission Color") or bsdf_node.inputs.get("Emission")
+                if emission_input:
+                    node_tree.links.new(emissive_tex_node.outputs["Color"], emission_input)
+                # Use the same UV map as the Base Color texture
+                node_tree.links.new(uv_map_node.outputs["UV"], emissive_tex_node.inputs["Vector"])
+
             # --- Bake Detail UV scale into a dedicated UV layer ---
             if detail_scale_value is not None:
                 mapping_scale = detail_scale_value / 100.0
