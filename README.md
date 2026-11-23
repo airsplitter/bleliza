@@ -72,6 +72,40 @@ All empties are placed at the world origin. Running it again creates a second
 set of empties with `.001` names. If an exporter ignores collection instances,
 use **Object > Apply > Make Instances Real** on the instance empties.
 
+## Make real and join LODs
+
+**Object Properties > BleLIZA Object Tools > Make Real & Join LODs** works on
+the active collection (including its child collections). It makes every linked
+or instanced object real and local, then joins all meshes with the same LOD
+suffix into one object per suffix, for example `Airport_LOD0`, `Airport_LOD1`
+and `Airport_LOD2` for the collection `Airport`. The joined objects are placed
+at the world origin; every part keeps its world position.
+
+- Collection instances (for example the empties of **LOD Collections to
+  Empties**), nested instances, directly linked objects and plain mesh objects
+  are all included.
+- The LOD suffix is read from the object name, then from the name of the
+  collection the object is in, then from the instanced collection and the
+  instance empty. `Pole` in collection `Sign_LOD0` therefore joins `LOD0`.
+- Meshes without an LOD suffix are made real but not joined.
+
+Options in the dialog:
+
+- **LOD Pattern**: case-insensitive regular expression for the suffix; the
+  optional group `lod` holds the number, so `_LOD00` and `_lod0` both join `LOD0`.
+- **Reuse Materials by Name** (on): a linked material uses the local material
+  with the same name if there is one, otherwise it is made local once and that
+  copy is reused. `Name.001` duplicates are replaced by `Name` everywhere and
+  deleted. Linked images and node groups of the materials are made local the
+  same way. Slots with the same material are merged.
+- **Remove Instance Empties** (on): deletes the instance empties that were made
+  real and parent empties left without children. Instance empties that also
+  instance non-mesh objects (lights, empties) are kept.
+
+Modifiers of instanced objects are not applied; the joined mesh uses the
+original mesh data. Instances of hidden collections are not evaluated and are
+listed in the summary. Use Undo to revert.
+
 ## Place objects from scenery XML
 
 **File > Import > Scenery XML Positions (BleLIZA)**, or **Object Properties >

@@ -504,6 +504,342 @@ class OBJECT_OT_bleliza_lod_collections_to_empties(bpy.types.Operator):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Make the linked/instanced objects of the active collection real and join
+# the meshes into one object per LOD suffix
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _strip_number_suffix(name):
+    """"Name.001" -> "Name"."""
+    match = _NUMBER_SUFFIX.match(name)
+    return match.group("base") if match else name
+
+
+class _LocalIdResolver:
+    """Map linked or "Name.001" datablocks to one local datablock per base name.
+
+    An existing local datablock named like the base name wins; a linked one
+    without a local match is copied once and the copy is reused from then on.
+    """
+
+    def __init__(self, id_collection, reuse_by_name):
+        self.id_collection = id_collection
+        self.reuse_by_name = reuse_by_name
+        self.by_name = {i.name: i for i in id_collection if i.library is None}
+        self.replaced = {}  # local "Name.001" duplicate -> datablock used instead
+        self.copied = 0
+        self.reused = 0
+
+    def resolve(self, datablock, localize_contents=None):
+        if datablock is None:
+            return None
+        base = _strip_number_suffix(datablock.name) if self.reuse_by_name else datablock.name
+        existing = self.by_name.get(base)
+        if datablock.library is None:
+            if existing is None:
+                self.by_name[base] = datablock
+                return datablock
+            if existing != datablock:
+                self.replaced[datablock] = existing
+                self.reused += 1
+            return existing
+        if existing is not None:
+            self.reused += 1
+            return existing
+        local = datablock.copy()  # A copy of linked data is always local.
+        if local.name != base and self.id_collection.get(base) is None:
+            local.name = base
+        self.by_name[base] = local
+        self.copied += 1
+        if localize_contents is not None:
+            localize_contents(local)
+        return local
+
+    def remove_replaced(self):
+        """Switch all remaining users of the replaced duplicates to the reused
+        datablock and delete the duplicates."""
+        for duplicate, existing in self.replaced.items():
+            duplicate.user_remap(existing)
+            self.id_collection.remove(duplicate)
+        return len(self.replaced)
+
+
+def _merge_material_slots(obj):
+    """Merge slots with the same material and drop empty or unused slots.
+    Only for single-user meshes whose slots are all linked to the mesh data."""
+    mesh = obj.data
+    if mesh.users != 1 or any(slot.link == 'OBJECT' for slot in obj.material_slots):
+        return
+    old = list(mesh.materials)
+    indices = [0] * len(mesh.polygons)
+    mesh.polygons.foreach_get("material_index", indices)
+    new, remap = [], {}
+    for index in sorted(set(indices)):
+        material = old[index] if index < len(old) else None
+        if material not in new:
+            new.append(material)
+        remap[index] = new.index(material)
+    if new == old:
+        return
+    mesh.materials.clear()
+    for material in new:
+        mesh.materials.append(material)
+    mesh.polygons.foreach_set("material_index", [remap[i] for i in indices])
+    mesh.update()
+
+
+class OBJECT_OT_bleliza_make_real_join_lods(bpy.types.Operator):
+    bl_idname = "object.bleliza_make_real_join_lods"
+    bl_label = "Make Real & Join LODs"
+    bl_description = (
+        "Make all linked and instanced objects of the active collection real and "
+        "local, then join the meshes into one object per LOD suffix (LOD0, LOD1, ...). "
+        "Materials with the same name are reused instead of duplicated"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    lod_pattern: bpy.props.StringProperty(
+        name="LOD Pattern",
+        description=(
+            "Regular expression (case-insensitive) for the LOD suffix of object or "
+            "collection names. Optional group 'lod' holds the LOD number"
+        ),
+        default=r"_LOD(?P<lod>\d+)$",
+    )
+    reuse_materials: bpy.props.BoolProperty(
+        name="Reuse Materials by Name",
+        description=(
+            "Use the existing local material with the same name (ignoring .001 "
+            "suffixes) instead of creating or keeping a duplicate"
+        ),
+        default=True,
+    )
+    remove_empties: bpy.props.BoolProperty(
+        name="Remove Instance Empties",
+        description=(
+            "Delete the collection-instance empties that were made real, and parent "
+            "empties left without children"
+        ),
+        default=True,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT' and context.collection is not None
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text=f"Collection: {context.collection.name}")
+        layout.prop(self, "lod_pattern")
+        layout.prop(self, "reuse_materials")
+        layout.prop(self, "remove_empties")
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    def _lod_key(self, lod_re, names):
+        """Return ("LOD<n>", n) for the first name with an LOD suffix, else None."""
+        for name in names:
+            match = lod_re.search(_strip_number_suffix(name))
+            if not match:
+                continue
+            lod = match.groupdict().get("lod")
+            if lod is not None and lod.isdigit():
+                return f"LOD{int(lod)}", int(lod)
+            return match.group(0).lstrip("_").upper(), -1
+        return None
+
+    def _localize_node_tree(self, node_tree, images, groups):
+        if node_tree is None:
+            return
+        for node in node_tree.nodes:
+            image = getattr(node, "image", None)
+            if image is not None and image.library is not None:
+                node.image = images.resolve(image)
+            group = getattr(node, "node_tree", None) if node.type == 'GROUP' else None
+            if group is not None and group.library is not None:
+                node.node_tree = groups.resolve(
+                    group, lambda g: self._localize_node_tree(g, images, groups))
+
+    # ── main ─────────────────────────────────────────────────────────────────
+
+    def execute(self, context):
+        try:
+            lod_re = re.compile(self.lod_pattern, re.IGNORECASE)
+        except re.error as exc:
+            self.report({'ERROR'}, f"Invalid LOD pattern: {exc}")
+            return {'CANCELLED'}
+
+        collection = context.collection
+        members = list(collection.all_objects)
+        member_set = set(members)
+        instancers = [o for o in members
+                      if o.instance_type == 'COLLECTION' and o.instance_collection is not None]
+        instancer_set = set(instancers)
+
+        # 1. Collect every mesh to make real: (source object, world matrix,
+        #    names to read the LOD suffix from, instancer or None).
+        depsgraph = context.evaluated_depsgraph_get()
+        sources, skipped_types, produced = [], {}, {o.name: 0 for o in instancers}
+        incomplete = set()
+        for inst in depsgraph.object_instances:
+            if not inst.is_instance or inst.parent is None:
+                continue
+            instancer = inst.parent.original
+            if instancer not in instancer_set:
+                continue
+            obj = inst.object.original
+            produced[instancer.name] += 1
+            if obj.type != 'MESH':
+                skipped_types[obj.type] = skipped_types.get(obj.type, 0) + 1
+                incomplete.add(instancer.name)
+                continue
+            names = ([obj.name] + [c.name for c in obj.users_collection]
+                     + [instancer.instance_collection.name, instancer.name])
+            sources.append((obj, inst.matrix_world.copy(), names, instancer))
+        not_evaluated = [name for name, count in produced.items() if count == 0]
+        incomplete.update(not_evaluated)
+
+        # Plain mesh objects of the collection (local or directly linked).
+        plain = [o for o in members if o.type == 'MESH' and o not in instancer_set]
+        linked_plain = [o for o in plain if o.library is not None]
+        for obj in plain:
+            names = [obj.name] + [c.name for c in obj.users_collection]
+            sources.append((obj, obj.matrix_world.copy(), names, None))
+
+        if not sources:
+            self.report({'WARNING'}, f"No mesh objects or instances found in '{collection.name}'")
+            return {'CANCELLED'}
+
+        # 2. Create the real objects and group them by LOD suffix.
+        groups, unjoined = {}, []
+        real_objects = []
+        for obj, matrix, names, instancer in sources:
+            key = self._lod_key(lod_re, names)
+            if instancer is None and obj.library is None:
+                part = obj  # Already a real, local object.
+            else:
+                part = bpy.data.objects.new(obj.name, obj.data)
+                part.matrix_world = matrix
+                for src_slot, slot in zip(obj.material_slots, part.material_slots):
+                    if src_slot.link == 'OBJECT':
+                        slot.link = 'OBJECT'
+                        slot.material = src_slot.material
+                collection.objects.link(part)
+                real_objects.append(part)
+            if key is None:
+                unjoined.append(part)
+            else:
+                groups.setdefault(key, []).append(part)
+
+        # 3. Join each LOD group into a new object at the world origin.
+        joined = []
+        part_meshes = {p.data for parts in groups.values() for p in parts
+                       if p.data.library is None}
+        for (label, _number), parts in sorted(groups.items(), key=lambda g: (g[0][1], g[0][0])):
+            name = f"{collection.name}_{label}"
+            result = bpy.data.objects.new(name, bpy.data.meshes.new(name))
+            collection.objects.link(result)
+            if hasattr(result.data, "use_auto_smooth") and any(
+                    getattr(p.data, "has_custom_normals", False) for p in parts):
+                result.data.use_auto_smooth = True  # Keep custom normals (Blender < 4.1).
+            selection = [result] + parts
+            with context.temp_override(active_object=result, object=result,
+                                       selected_objects=selection,
+                                       selected_editable_objects=selection):
+                bpy.ops.object.join()
+            joined.append((result, len(parts)))
+        # Local meshes of joined objects are left without users; delete them so
+        # they do not keep duplicate materials alive.
+        for mesh in part_meshes:
+            if mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+
+        # Real objects that were not joined still need local, single-user data.
+        for part in unjoined:
+            if part in real_objects or part.data.library is not None:
+                part.data = part.data.copy()
+
+        # Linked objects that were copied are taken out of the collection tree.
+        tree = [collection] + list(collection.children_recursive)
+        for obj in linked_plain:
+            for col in tree:
+                if col.library is None and obj in col.objects[:]:
+                    col.objects.unlink(obj)
+
+        # 4. Make materials, images and node groups local, reusing by name.
+        materials = _LocalIdResolver(bpy.data.materials, self.reuse_materials)
+        images = _LocalIdResolver(bpy.data.images, self.reuse_materials)
+        node_groups = _LocalIdResolver(bpy.data.node_groups, self.reuse_materials)
+
+        def localize_material(material):
+            self._localize_node_tree(material.node_tree, images, node_groups)
+
+        for obj in [r for r, _ in joined] + unjoined:
+            for slot in obj.material_slots:
+                material = materials.resolve(slot.material, localize_material)
+                if material != slot.material:
+                    slot.material = material
+            _merge_material_slots(obj)
+        removed_materials = materials.remove_replaced()
+
+        # 5. Remove the empties that were made real.
+        removed_empties = 0
+        if self.remove_empties:
+            parents = set()
+            for instancer in instancers:
+                if instancer.name in incomplete:
+                    continue
+                if instancer.parent is not None:
+                    parents.add(instancer.parent)
+                bpy.data.objects.remove(instancer)
+                removed_empties += 1
+            while parents:
+                parent = parents.pop()
+                if (parent in member_set and parent.type == 'EMPTY'
+                        and parent.instance_type == 'NONE' and not parent.children
+                        and parent.library is None):
+                    if parent.parent is not None:
+                        parents.add(parent.parent)
+                    bpy.data.objects.remove(parent)
+                    removed_empties += 1
+
+        # 6. Summary.
+        details = [f"{result.name}: {count} object(s) joined" for result, count in joined]
+        if unjoined:
+            details.append(f"{len(unjoined)} object(s) without LOD suffix made real, not joined")
+        if materials.reused or materials.copied:
+            details.append(f"Materials: {materials.reused} reused by name, "
+                           f"{materials.copied} made local, {removed_materials} duplicate(s) removed")
+        if skipped_types:
+            details.append("Skipped non-mesh instances: " + ", ".join(
+                f"{count} {kind.lower()}" for kind, count in sorted(skipped_types.items())))
+        if not_evaluated:
+            details.append("No instances evaluated (hidden?): " + ", ".join(sorted(not_evaluated)))
+
+        summary = (f"Joined {sum(c for _, c in joined)} object(s) into {len(joined)} LOD "
+                   f"object(s) in '{collection.name}'"
+                   + (f"; removed {removed_empties} empties" if removed_empties else "")
+                   + ".")
+        self.report({'INFO'}, summary)
+        print("[BleLIZA Make Real & Join LODs] " + summary)
+        for line in details:
+            print("  " + line)
+
+        if not bpy.app.background:
+            def draw_summary(menu, _context):
+                menu.layout.label(text=summary)
+                for line in details:
+                    menu.layout.label(text=line)
+
+            context.window_manager.popup_menu(
+                draw_summary, title="Make real & join LODs summary", icon='INFO'
+            )
+        return {'FINISHED'}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Move objects to the lat/lon positions of an MSFS scenery XML file
 # ─────────────────────────────────────────────────────────────────────────────
 
