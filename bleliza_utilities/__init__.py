@@ -21,6 +21,7 @@ classes = (
     operators.OBJECT_OT_bleliza_cleanup_meshes,
     operators.OBJECT_OT_bleliza_import_files_to_collections,
     operators.OBJECT_OT_bleliza_lod_collections_to_empties,
+    operators.OBJECT_OT_bleliza_make_real_join_lods,
     operators.OBJECT_OT_bleliza_place_from_scenery_xml,
     operators.NODE_OT_create_preset_2020,
     operators.NODE_OT_create_preset_2024,

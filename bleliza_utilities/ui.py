@@ -108,6 +108,10 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         layout.operator("object.bleliza_place_from_scenery_xml", icon='WORLD')
         layout.separator()
 
+        layout.label(text="LODs (Active Collection):")
+        layout.operator("object.bleliza_make_real_join_lods", icon='MOD_BUILD')
+        layout.separator()
+
         layout.label(text="Mesh Cleanup (Selected):")
         layout.operator("object.bleliza_cleanup_meshes")
         layout.separator()
