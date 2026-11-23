@@ -2544,6 +2544,62 @@ def _scale_emission_strengths(factor):
     return changed
 
 
+# Bake settings: stored on the scene (shown in the panel, so they persist) and
+# repeated as operator properties so scripts can pass them directly.
+_LIGHTMAP_SETTINGS = {
+    "image_name": bpy.props.StringProperty(
+        name="Image Name",
+        description="Name of the lightmap image; empty means '<target>_Lightmap'. "
+                    "An existing image with this name is replaced",
+        default="",
+    ),
+    "resolution": bpy.props.IntProperty(
+        name="Resolution", description="Width and height of the lightmap in pixels",
+        default=1024, min=16, max=16384,
+    ),
+    "uv_map": bpy.props.StringProperty(
+        name="UV Map",
+        description="UV map of the target to bake into; empty means the active render UV map",
+        default="",
+    ),
+    "samples": bpy.props.IntProperty(
+        name="Samples", description="Cycles samples; more samples mean less noise",
+        default=256, min=1, max=65536,
+    ),
+    "margin": bpy.props.IntProperty(
+        name="Margin", description="Pixels to extend the baked result past UV island borders",
+        default=16, min=0, max=64,
+    ),
+    "emission_only": bpy.props.BoolProperty(
+        name="Emission Only",
+        description="Turn off the world and all lamps during the bake, so the lightmap "
+                    "holds only the light cast by emissive materials",
+        default=True,
+    ),
+    "emission_scale": bpy.props.FloatProperty(
+        name="Emission Scale",
+        description="Temporarily multiply the emission strength of all materials "
+                    "during the bake (strengths driven by node links stay unchanged)",
+        default=1.0, min=0.0, soft_max=100.0,
+    ),
+    "float_buffer": bpy.props.BoolProperty(
+        name="32-bit Float (HDR)",
+        description="Bake into a float image, so light brighter than 1.0 is not clipped. "
+                    "Saved as OpenEXR, otherwise as PNG",
+        default=False,
+    ),
+    "filepath": bpy.props.StringProperty(
+        name="Save To",
+        description="File to save the lightmap to; empty packs the image into the .blend file",
+        default="", subtype='FILE_PATH',
+    ),
+}
+
+
+class BLELIZA_PG_lightmap_settings(bpy.types.PropertyGroup):
+    __annotations__ = dict(_LIGHTMAP_SETTINGS)
+
+
 class OBJECT_OT_bleliza_bake_emission_lightmap(bpy.types.Operator):
     bl_idname = "object.bleliza_bake_emission_lightmap"
     bl_label = "Bake Emission Lightmap"
@@ -2554,60 +2610,12 @@ class OBJECT_OT_bleliza_bake_emission_lightmap(bpy.types.Operator):
     )
     bl_options = {'REGISTER', 'UNDO'}
 
-    image_name: bpy.props.StringProperty(
-        name="Image Name",
-        description="Name of the lightmap image; empty means '<target>_Lightmap'. "
-                    "An existing image with this name is reused and overwritten",
-        default="",
-    )
-    resolution: bpy.props.IntProperty(
-        name="Resolution", description="Width and height of the lightmap in pixels",
-        default=1024, min=16, max=16384,
-    )
-    uv_map: bpy.props.StringProperty(
-        name="UV Map",
-        description="UV map of the target to bake into; empty means the active render UV map",
-        default="",
-    )
-    samples: bpy.props.IntProperty(
-        name="Samples", description="Cycles samples; more samples mean less noise",
-        default=256, min=1, max=65536,
-    )
-    margin: bpy.props.IntProperty(
-        name="Margin", description="Pixels to extend the baked result past UV island borders",
-        default=16, min=0, max=64,
-    )
-    emission_only: bpy.props.BoolProperty(
-        name="Emission Only",
-        description="Turn off the world and all lamps during the bake, so the lightmap "
-                    "holds only the light cast by emissive materials",
-        default=True,
-    )
-    emission_scale: bpy.props.FloatProperty(
-        name="Emission Scale",
-        description="Temporarily multiply the emission strength of all materials "
-                    "during the bake (strengths driven by node links stay unchanged)",
-        default=1.0, min=0.0, soft_max=100.0,
-    )
-    float_buffer: bpy.props.BoolProperty(
-        name="32-bit Float (HDR)",
-        description="Bake into a float image, so light brighter than 1.0 is not clipped. "
-                    "Saved as OpenEXR, otherwise as PNG",
-        default=False,
-    )
-    filepath: bpy.props.StringProperty(
-        name="Save To",
-        description="File to save the lightmap to; empty packs the image into the .blend file",
-        default="", subtype='FILE_PATH',
-    )
+    __annotations__ = dict(_LIGHTMAP_SETTINGS)
 
     @classmethod
     def poll(cls, context):
         target = getattr(context.scene, "bleliza_lightmap_target", None)
         return target is not None and target.type == 'MESH'
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=400)
 
     def execute(self, context):
         scene = context.scene

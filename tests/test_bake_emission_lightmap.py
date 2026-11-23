@@ -49,6 +49,7 @@ op = bpy.ops.object.bleliza_bake_emission_lightmap
 assert not op.poll()
 scene.bleliza_lightmap_target = ground
 assert op.poll()
+assert scene.bleliza_lightmap.resolution == 1024 and scene.bleliza_lightmap.emission_only
 
 common = dict(resolution=32, samples=8, margin=2)
 assert op(**common) == {'FINISHED'}

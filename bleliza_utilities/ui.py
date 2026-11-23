@@ -1,4 +1,5 @@
 import bpy
+from .operators import _LIGHTMAP_SETTINGS
 
 # Custom parent panel to group our tools
 class BLELIZA_MATERIAL_PT_parent(bpy.types.Panel):
@@ -110,7 +111,13 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
 
         layout.label(text="Emission Lightmap:")
         layout.prop(scene, "bleliza_lightmap_target", text="Target")
-        layout.operator("object.bleliza_bake_emission_lightmap", icon='LIGHT_SUN')
+        settings = scene.bleliza_lightmap
+        col = layout.column(align=True)
+        for name in _LIGHTMAP_SETTINGS:
+            col.prop(settings, name)
+        op = layout.operator("object.bleliza_bake_emission_lightmap", icon='LIGHT_SUN')
+        for name in _LIGHTMAP_SETTINGS:
+            setattr(op, name, getattr(settings, name))
         layout.separator()
 
         layout.label(text="Mesh Cleanup (Selected):")

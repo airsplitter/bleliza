@@ -109,13 +109,14 @@ duplicate names (the first entry is used).
 ## Bake emission lightmap
 
 **Object Properties > BleLIZA Object Tools > Emission Lightmap**: choose the
-**Target** mesh that holds the lightmap, then click **Bake Emission Lightmap**.
+**Target** mesh that holds the lightmap, set the options below it, then click
+**Bake Emission Lightmap**. The options are saved with the scene.
 Cycles bakes the light that emissive materials in the scene cast onto the
 target into the target's UV map (Diffuse bake with Direct and Indirect light,
 Color off), so the result is pure light without the target's own textures. The
 target's own emission is not part of its lightmap.
 
-Options in the dialog:
+Options:
 
 - **Image Name**: empty means `<target>_Lightmap`. An existing image with this
   name is replaced, and materials that already show it switch to the new bake.
