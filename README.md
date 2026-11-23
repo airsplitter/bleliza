@@ -105,3 +105,32 @@ Options in the browser sidebar:
 Parented objects are placed in world space. The summary lists names from the
 file that were not found in the active collection, invalid positions and
 duplicate names (the first entry is used).
+
+## Bake emission lightmap
+
+**Object Properties > BleLIZA Object Tools > Emission Lightmap**: choose the
+**Target** mesh that holds the lightmap, then click **Bake Emission Lightmap**.
+Cycles bakes the light that emissive materials in the scene cast onto the
+target into the target's UV map (Diffuse bake with Direct and Indirect light,
+Color off), so the result is pure light without the target's own textures. The
+target's own emission is not part of its lightmap.
+
+Options in the dialog:
+
+- **Image Name**: empty means `<target>_Lightmap`. An existing image with this
+  name is replaced, and materials that already show it switch to the new bake.
+- **Resolution**, **UV Map** (empty means the active render UV map),
+  **Samples** and **Margin**.
+- **Emission Only** (on): the world and all lamps are switched off during the
+  bake, so only emissive materials light the target. Lamps inside collection
+  instances or linked from another file cannot be switched off and still count.
+- **Emission Scale**: multiplies every material's emission strength during the
+  bake. Strengths that are driven by node links stay unchanged.
+- **32-bit Float (HDR)**: keeps light brighter than 1.0; saved as OpenEXR
+  instead of PNG.
+- **Save To**: file for the lightmap. Empty packs the image into the `.blend`.
+
+Render engine, samples, world, lamps, emission strengths, selection and the
+active object are restored afterwards; the add-on adds and removes a temporary
+Image Texture node in the target's materials. Cycles does not denoise bakes, so
+raise **Samples** or **Emission Scale** if the lightmap is noisy.

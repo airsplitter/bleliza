@@ -2516,6 +2516,263 @@ class NODE_OT_bake_mapping_to_detail_uv(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Bake the light cast by emissive materials into a lightmap on a target object
+# ─────────────────────────────────────────────────────────────────────────────
+
+_LIGHTMAP_BAKE_NODE = "BleLIZA Lightmap Bake"
+_LIGHTMAP_TEMP_MATERIAL = "BleLIZA Lightmap Bake (temporary)"
+
+
+def _scale_emission_strengths(factor):
+    """Multiply every unlinked emission strength; return values to restore."""
+    changed = []
+    for mat in bpy.data.materials:
+        if mat.library or not mat.use_nodes or not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type == 'BSDF_PRINCIPLED':
+                socket = node.inputs.get("Emission Strength")
+            elif node.type == 'EMISSION':
+                socket = node.inputs.get("Strength")
+            else:
+                continue
+            if socket is None or socket.is_linked:
+                continue
+            changed.append((socket, socket.default_value))
+            socket.default_value *= factor
+    return changed
+
+
+class OBJECT_OT_bleliza_bake_emission_lightmap(bpy.types.Operator):
+    bl_idname = "object.bleliza_bake_emission_lightmap"
+    bl_label = "Bake Emission Lightmap"
+    bl_description = (
+        "Bake the light that emissive materials of the scene cast onto the "
+        "lightmap target object into an image texture (Cycles Diffuse bake, "
+        "Direct + Indirect, without surface color)"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    image_name: bpy.props.StringProperty(
+        name="Image Name",
+        description="Name of the lightmap image; empty means '<target>_Lightmap'. "
+                    "An existing image with this name is reused and overwritten",
+        default="",
+    )
+    resolution: bpy.props.IntProperty(
+        name="Resolution", description="Width and height of the lightmap in pixels",
+        default=1024, min=16, max=16384,
+    )
+    uv_map: bpy.props.StringProperty(
+        name="UV Map",
+        description="UV map of the target to bake into; empty means the active render UV map",
+        default="",
+    )
+    samples: bpy.props.IntProperty(
+        name="Samples", description="Cycles samples; more samples mean less noise",
+        default=256, min=1, max=65536,
+    )
+    margin: bpy.props.IntProperty(
+        name="Margin", description="Pixels to extend the baked result past UV island borders",
+        default=16, min=0, max=64,
+    )
+    emission_only: bpy.props.BoolProperty(
+        name="Emission Only",
+        description="Turn off the world and all lamps during the bake, so the lightmap "
+                    "holds only the light cast by emissive materials",
+        default=True,
+    )
+    emission_scale: bpy.props.FloatProperty(
+        name="Emission Scale",
+        description="Temporarily multiply the emission strength of all materials "
+                    "during the bake (strengths driven by node links stay unchanged)",
+        default=1.0, min=0.0, soft_max=100.0,
+    )
+    float_buffer: bpy.props.BoolProperty(
+        name="32-bit Float (HDR)",
+        description="Bake into a float image, so light brighter than 1.0 is not clipped. "
+                    "Saved as OpenEXR, otherwise as PNG",
+        default=False,
+    )
+    filepath: bpy.props.StringProperty(
+        name="Save To",
+        description="File to save the lightmap to; empty packs the image into the .blend file",
+        default="", subtype='FILE_PATH',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        target = getattr(context.scene, "bleliza_lightmap_target", None)
+        return target is not None and target.type == 'MESH'
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=400)
+
+    def execute(self, context):
+        scene = context.scene
+        target = scene.bleliza_lightmap_target
+        view_layer = context.view_layer
+        if target is None or target.type != 'MESH':
+            self.report({'ERROR'}, "Choose a mesh object as lightmap target.")
+            return {'CANCELLED'}
+        if view_layer.objects.get(target.name) is None or not target.visible_get():
+            self.report({'ERROR'}, f"Lightmap target '{target.name}' must be visible in the view layer.")
+            return {'CANCELLED'}
+        if target.hide_render:
+            self.report({'ERROR'}, f"Lightmap target '{target.name}' is disabled in renders.")
+            return {'CANCELLED'}
+        if target.library or target.data.library:
+            self.report({'ERROR'}, f"Lightmap target '{target.name}' is linked and read-only.")
+            return {'CANCELLED'}
+
+        uv_layers = target.data.uv_layers
+        if not uv_layers:
+            self.report({'ERROR'}, f"Lightmap target '{target.name}' has no UV map.")
+            return {'CANCELLED'}
+        if self.uv_map:
+            if uv_layers.get(self.uv_map) is None:
+                self.report({'ERROR'}, f"'{target.name}' has no UV map named '{self.uv_map}'.")
+                return {'CANCELLED'}
+            uv_name = self.uv_map
+        else:
+            uv_name = next((uv.name for uv in uv_layers if uv.active_render), uv_layers[0].name)
+
+        name = self.image_name.strip() or f"{target.name}_Lightmap"
+        # Bake into a fresh image; an existing image of that name is replaced
+        # afterwards, so materials that show the old lightmap keep working.
+        image = bpy.data.images.new(name + "_baking", self.resolution, self.resolution,
+                                    alpha=False, float_buffer=self.float_buffer)
+
+        if context.object and context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        selected = list(context.selected_objects)
+        active = view_layer.objects.active
+
+        cycles = scene.cycles
+        saved = {
+            "engine": scene.render.engine,
+            "samples": cycles.samples,
+            "world": scene.world,
+        }
+        hidden_lights = []
+        scaled = []
+        temp_nodes = []      # (material, node, previous active node)
+        temp_material = None
+        nodes_enabled = []
+
+        try:
+            scene.render.engine = 'CYCLES'
+            cycles.samples = self.samples
+            if self.emission_only:
+                scene.world = None
+                for obj in scene.objects:
+                    if obj.type == 'LIGHT' and not obj.hide_render and obj.library is None:
+                        obj.hide_render = True
+                        hidden_lights.append(obj)
+            if self.emission_scale != 1.0:
+                scaled = _scale_emission_strengths(self.emission_scale)
+
+            # Cycles bakes into the active Image Texture node of every material
+            # of the target, so every material slot needs one.
+            if not any(slot.material for slot in target.material_slots):
+                temp_material = bpy.data.materials.new(_LIGHTMAP_TEMP_MATERIAL)
+                target.data.materials.append(temp_material)
+            for mat in {slot.material for slot in target.material_slots if slot.material}:
+                if not mat.use_nodes:
+                    mat.use_nodes = True
+                    nodes_enabled.append(mat)
+                nodes = mat.node_tree.nodes
+                previous = nodes.active
+                node = nodes.new("ShaderNodeTexImage")
+                node.name = node.label = _LIGHTMAP_BAKE_NODE
+                node.image = image
+                nodes.active = node
+                temp_nodes.append((mat, node, previous))
+
+            for obj in selected:
+                obj.select_set(False)
+            target.select_set(True)
+            view_layer.objects.active = target
+
+            bpy.ops.object.bake(
+                type='DIFFUSE',
+                pass_filter={'DIRECT', 'INDIRECT'},
+                margin=self.margin,
+                uv_layer=uv_name,
+                use_clear=True,
+                use_selected_to_active=False,
+                target='IMAGE_TEXTURES',
+            )
+        except RuntimeError as exc:
+            bake_error = exc
+        else:
+            bake_error = None
+        finally:
+            for mat, node, previous in temp_nodes:
+                mat.node_tree.nodes.remove(node)
+                if previous is not None:
+                    mat.node_tree.nodes.active = previous
+            for mat in nodes_enabled:
+                mat.use_nodes = False
+            if temp_material is not None:
+                index = target.data.materials.find(temp_material.name)
+                if index >= 0:
+                    target.data.materials.pop(index=index)
+                bpy.data.materials.remove(temp_material)
+            for socket, value in scaled:
+                socket.default_value = value
+            for obj in hidden_lights:
+                obj.hide_render = False
+            scene.world = saved["world"]
+            cycles.samples = saved["samples"]
+            scene.render.engine = saved["engine"]
+            target.select_set(False)
+            for obj in selected:
+                obj.select_set(True)
+            view_layer.objects.active = active
+
+        if bake_error is not None:
+            bpy.data.images.remove(image)
+            self.report({'ERROR'}, f"Bake failed: {bake_error}")
+            return {'CANCELLED'}
+        self._replace_image(image, name)
+        where = self._store_image(image)
+        if where is None:
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Baked lightmap '{image.name}' for '{target.name}' "
+                              f"(UV map '{uv_name}'), {where}.")
+        return {'FINISHED'}
+
+    def _replace_image(self, baked, name):
+        """Give the baked image the lightmap name and swap it in for an old one."""
+        old = bpy.data.images.get(name)
+        if old is not None and old != baked and old.library is None:
+            old.user_remap(baked)
+            bpy.data.images.remove(old)
+        baked.name = name
+
+    def _store_image(self, image):
+        """Save or pack the baked image; return a description or None on failure."""
+        if self.filepath:
+            path = bpy.path.abspath(self.filepath)
+            ext = ".exr" if self.float_buffer else ".png"
+            if not path.lower().endswith(ext):
+                path = os.path.splitext(path)[0] + ext
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            image.filepath_raw = path
+            image.file_format = 'OPEN_EXR' if self.float_buffer else 'PNG'
+            try:
+                image.save()
+            except RuntimeError as exc:
+                self.report({'ERROR'}, f"Baked, but could not save {path}: {exc}")
+                return None
+            image.source = 'FILE'
+            return f"saved to {path}"
+        image.pack()
+        return "packed into the .blend file"
+
+
 class OBJECT_OT_remove_non_aliza_custom_props(bpy.types.Operator):
     bl_idname = "object.remove_non_aliza_custom_props"
     bl_label = "Remove Non-ALIZA Custom Properties (Objects)"

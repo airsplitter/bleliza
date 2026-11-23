@@ -108,6 +108,11 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         layout.operator("object.bleliza_place_from_scenery_xml", icon='WORLD')
         layout.separator()
 
+        layout.label(text="Emission Lightmap:")
+        layout.prop(scene, "bleliza_lightmap_target", text="Target")
+        layout.operator("object.bleliza_bake_emission_lightmap", icon='LIGHT_SUN')
+        layout.separator()
+
         layout.label(text="Mesh Cleanup (Selected):")
         layout.operator("object.bleliza_cleanup_meshes")
         layout.separator()
