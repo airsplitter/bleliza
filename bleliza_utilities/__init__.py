@@ -37,6 +37,7 @@ classes = (
     operators.OBJECT_OT_merge_duplicate_materials,
     operators.OBJECT_OT_remove_unused_materials,
     operators.NODE_OT_bake_mapping_to_detail_uv,
+    operators.OBJECT_OT_bleliza_bake_emission_lightmap,
     operators.NODE_OT_add_emissive_from_dds,
     operators.OBJECT_OT_remove_non_aliza_custom_props,
     operators.OBJECT_OT_remove_non_aliza_material_custom_props,
@@ -124,6 +125,13 @@ def register():
         default="",
     )
 
+    bpy.types.Scene.bleliza_lightmap_target = bpy.props.PointerProperty(
+        name="Lightmap Target",
+        type=bpy.types.Object,
+        description="Mesh object that receives the baked emission lightmap",
+        poll=lambda _self, obj: obj.type == 'MESH',
+    )
+
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(operators.menu_func_import_to_collections)
     for cls in reversed(classes):
@@ -140,6 +148,7 @@ def unregister():
     del bpy.types.Scene.bleliza_mat_filter
     del bpy.types.Scene.bleliza_flat_threshold
     del bpy.types.Scene.bleliza_emis_extra_suffixes
+    del bpy.types.Scene.bleliza_lightmap_target
 
 if __name__ == "__main__":
     register()
