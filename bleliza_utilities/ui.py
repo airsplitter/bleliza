@@ -125,6 +125,12 @@ class BLELIZA_PT_object_tools(bpy.types.Panel):
         
         op_sel = layout.operator("mesh.select_flat_islands", text="Select Flat Z Islands")
         op_sel.threshold = scene.bleliza_flat_threshold
+
+        layout.separator()
+        layout.label(text="Select objects from LOD Collections")
+        row = layout.row(align=True)
+        for lod in range(5):
+            row.operator("object.bleliza_select_lod_objects", text=f"LOD{lod}").lod = lod
         
         layout.separator()
         layout.label(text="Custom Properties (Scene-wide):")

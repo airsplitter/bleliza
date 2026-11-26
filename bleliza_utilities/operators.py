@@ -2645,6 +2645,77 @@ class OBJECT_OT_make_real_trees(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Select all objects of the LOD<n> collections below the active collection
+class OBJECT_OT_bleliza_select_lod_objects(bpy.types.Operator):
+    bl_idname = "object.bleliza_select_lod_objects"
+    bl_label = "Select LOD Objects"
+    bl_description = (
+        "Select all objects in collections whose name ends with the LOD suffix, "
+        "searching only the sub collections of the active collection. "
+        "Shift-click to add to the current selection"
+    )
+    bl_options = {'REGISTER', 'UNDO'}
+
+    lod: bpy.props.IntProperty(name="LOD", default=0, min=0)
+    extend: bpy.props.BoolProperty(
+        name="Extend",
+        description="Add to the current selection instead of replacing it",
+        default=False,
+    )
+
+    @staticmethod
+    def _matches(name, suffix):
+        """Name ends with suffix (case-insensitive), ignoring a Blender '.001' duplicate tail."""
+        import re
+        base = re.sub(r"\.\d{3,}$", "", name)
+        return base.lower().endswith(suffix.lower())
+
+    def invoke(self, context, event):
+        self.extend = event.shift
+        return self.execute(context)
+
+    def execute(self, context):
+        active = context.view_layer.active_layer_collection.collection
+        suffix = f"LOD{self.lod}"
+
+        def descendants(collection):
+            for child in collection.children:
+                yield child
+                yield from descendants(child)
+
+        lod_collections = [c for c in descendants(active) if self._matches(c.name, suffix)]
+        if not lod_collections:
+            self.report({'WARNING'}, f"No '*{suffix}' collections found below '{active.name}'")
+            return {'CANCELLED'}
+
+        if not self.extend:
+            for obj in context.view_layer.objects:
+                obj.select_set(False)
+
+        targets = []
+        for collection in lod_collections:
+            for obj in collection.all_objects:
+                if obj not in targets:
+                    targets.append(obj)
+
+        selected = 0
+        for obj in targets:
+            if obj.name in context.view_layer.objects and obj.visible_get():
+                obj.select_set(True)
+                selected += 1
+
+        if selected:
+            first = next(o for o in targets if o.select_get())
+            context.view_layer.objects.active = first
+
+        skipped = len(targets) - selected
+        msg = f"Selected {selected} objects from {len(lod_collections)} '{suffix}' collections"
+        if skipped:
+            msg += f" ({skipped} hidden or excluded objects skipped)"
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
 class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
     bl_idname = "object.merge_duplicate_materials"
     bl_label = "Merge Duplicate Materials"
